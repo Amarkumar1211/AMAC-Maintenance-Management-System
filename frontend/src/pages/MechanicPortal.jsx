@@ -5,6 +5,7 @@ import { subscribeToNotification } from '../services/signalr';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import TicketDetailModal from '../components/TicketDetailModal';
+import BreakdownSlipModal from '../components/BreakdownSlipModal';
 import {
   Wrench,
   Clock,
@@ -18,7 +19,9 @@ import {
   RotateCcw,
   Package,
   Layers,
-  ArrowRight
+  Search,
+  ArrowRight,
+  Printer
 } from 'lucide-react';
 
 export default function MechanicPortal() {
@@ -26,7 +29,10 @@ export default function MechanicPortal() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('all_active'); // 'all_active', 'needs_accept', 'in_progress', 'done'
+  const [selectedSlipTicketId, setSelectedSlipTicketId] = useState(null);
+  const [activeSubsection, setActiveSubsection] = useState('active'); // 'active', 'pending', 'completed'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [scopeFilter, setScopeFilter] = useState(user?.sectionId ? 'my_section' : 'all_plant'); // 'my_section', 'my_assigned', 'all_plant'
 
   const loadData = async () => {
     try {
@@ -82,24 +88,63 @@ export default function MechanicPortal() {
     }
   };
 
-  // Filter tickets for this mechanic or show all assigned to technicians
-  const isMechanicRole = user?.roles?.includes('MECHANIC');
-  const mechanicTickets = isMechanicRole && user?.mechanicId
-    ? tickets.filter(t => t.assignedMechanicId === user.mechanicId || t.assignedMechanicName === user.employeeName)
-    : tickets;
+  // Filter tickets based on section scope and assigned status
+  const isPureMechanic = user?.roles?.includes('MECHANIC') && !user?.roles?.includes('ADMIN');
+  const mechanicTickets = tickets.filter(t => {
+    // If mechanic, strictly lock to their section or assigned work orders (other sections hidden)
+    if (isPureMechanic) {
+      if (scopeFilter === 'my_assigned' && user?.mechanicId) {
+        return t.assignedMechanicId === user.mechanicId || t.assignedMechanicName === user.employeeName;
+      }
+      if (user?.sectionId && user?.mechanicId) {
+        return t.sectionId === user.sectionId || t.assignedMechanicId === user.mechanicId;
+      }
+      if (user?.sectionId) {
+        return t.sectionId === user.sectionId;
+      }
+      if (user?.mechanicId) {
+        return t.assignedMechanicId === user.mechanicId || t.assignedMechanicName === user.employeeName;
+      }
+    }
 
-  const assignedWaitingAccept = mechanicTickets.filter(t => t.currentStatus === 'ASSIGNED');
-  const acceptedReadyToStart = mechanicTickets.filter(t => t.currentStatus === 'ACCEPTED');
-  const activeWorking = mechanicTickets.filter(t => t.currentStatus === 'IN_PROGRESS' || t.currentStatus === 'ON_HOLD');
-  const submittedWaitingVerify = mechanicTickets.filter(t => t.currentStatus === 'AWAITING_SUPERVISOR' || t.currentStatus === 'AWAITING_INCHARGE');
-  const allOpen = mechanicTickets.filter(t => t.currentStatus !== 'CLOSED' && t.currentStatus !== 'CANCELLED');
-
-  const displayedTickets = allOpen.filter(t => {
-    if (activeFilter === 'needs_accept') return t.currentStatus === 'ASSIGNED';
-    if (activeFilter === 'in_progress') return t.currentStatus === 'IN_PROGRESS' || t.currentStatus === 'ACCEPTED' || t.currentStatus === 'ON_HOLD';
-    if (activeFilter === 'done') return t.currentStatus === 'AWAITING_SUPERVISOR' || t.currentStatus === 'AWAITING_INCHARGE';
+    if (scopeFilter === 'my_section' && user?.sectionId) {
+      return t.sectionId === user.sectionId || t.assignedMechanicId === user?.mechanicId;
+    }
+    if (scopeFilter === 'my_assigned' && user?.mechanicId) {
+      return t.assignedMechanicId === user.mechanicId || t.assignedMechanicName === user.employeeName;
+    }
+    // all_plant (Admin only)
     return true;
   });
+
+  // 3 Clear Subsections: Active Work, Pending, Completed
+  const activeWorkTickets = mechanicTickets.filter(t =>
+    t.currentStatus === 'IN_PROGRESS' ||
+    t.currentStatus === 'ACCEPTED' ||
+    t.currentStatus === 'ON_HOLD'
+  );
+
+  const pendingTickets = mechanicTickets.filter(t =>
+    t.currentStatus === 'ASSIGNED' ||
+    t.currentStatus === 'AWAITING_SUPERVISOR' ||
+    t.currentStatus === 'AWAITING_INCHARGE' ||
+    t.currentStatus === 'NEW'
+  );
+
+  const completedTickets = mechanicTickets.filter(t =>
+    t.currentStatus === 'CLOSED'
+  );
+
+  const currentSubsectionList =
+    activeSubsection === 'pending' ? pendingTickets :
+      activeSubsection === 'completed' ? completedTickets :
+        activeWorkTickets;
+
+  const displayedTickets = currentSubsectionList.filter(t =>
+    t.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.machineCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.breakdownReason.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -114,9 +159,21 @@ export default function MechanicPortal() {
             <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
               Mechanic Repair Workbench — Field Engineering
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Unit 5 (U5) • Logged Technician: <span className="font-bold text-emerald-800">{user?.employeeName || 'Ramesh Yadav'}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-xs text-slate-500">
+                Unit 5 (U5) • Field Technician: <strong className="font-bold text-emerald-900">{user?.employeeName || 'Ramesh Yadav'}</strong>
+              </span>
+              {user?.sectionName ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-300 flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1ea751]"></span>
+                  Assigned Bay: {user.sectionName} ({user.sectionCode})
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-300 font-mono">
+                  Plant-Wide Float Technician
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -132,112 +189,125 @@ export default function MechanicPortal() {
         </div>
       </div>
 
-      {/* 4 Interactive Stage Filters (Large, Touch-Friendly for Factory Floor) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <button
-          onClick={() => setActiveFilter(activeFilter === 'needs_accept' ? 'all_active' : 'needs_accept')}
-          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${activeFilter === 'needs_accept'
-              ? 'bg-[#0e4d2a] text-white border-[#0e4d2a] shadow-md ring-2 ring-[#0e4d2a]/30'
-              : 'bg-white border-slate-200/90 text-slate-800 hover:border-emerald-400 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-xs font-bold ${activeFilter === 'needs_accept' ? 'text-emerald-100' : 'text-purple-700'}`}>
-              1. Dispatched (New)
-            </span>
-            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${activeFilter === 'needs_accept' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-800'
-              }`}>
-              {assignedWaitingAccept.length}
-            </span>
-          </div>
-          <div className="text-2xl font-black font-mono tracking-tight">{assignedWaitingAccept.length}</div>
-          <p className={`text-[11px] mt-0.5 ${activeFilter === 'needs_accept' ? 'text-emerald-200' : 'text-slate-400'}`}>
-            Click to accept job
-          </p>
-        </button>
+      {/* Section / Work Scope Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-2.5 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono mr-1">
+            WORKBENCH SCOPE:
+          </span>
 
-        <button
-          onClick={() => setActiveFilter(activeFilter === 'in_progress' ? 'all_active' : 'in_progress')}
-          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${activeFilter === 'in_progress'
-              ? 'bg-[#0e4d2a] text-white border-[#0e4d2a] shadow-md ring-2 ring-[#0e4d2a]/30'
-              : 'bg-white border-slate-200/90 text-slate-800 hover:border-emerald-400 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-xs font-bold ${activeFilter === 'in_progress' ? 'text-emerald-100' : 'text-amber-700'}`}>
-              2. In Active Labor
-            </span>
-            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${activeFilter === 'in_progress' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-              }`}>
-              {activeWorking.length + acceptedReadyToStart.length}
-            </span>
-          </div>
-          <div className="text-2xl font-black font-mono tracking-tight">
-            {activeWorking.length + acceptedReadyToStart.length}
-          </div>
-          <p className={`text-[11px] mt-0.5 ${activeFilter === 'in_progress' ? 'text-emerald-200' : 'text-slate-400'}`}>
-            Ready / Underway
-          </p>
-        </button>
+          {user?.sectionId && (
+            <button
+              onClick={() => setScopeFilter('my_section')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${scopeFilter === 'my_section'
+                ? 'bg-[#0e4d2a] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>{user.sectionName || 'My Section'} Bay</span>
+            </button>
+          )}
 
-        <button
-          onClick={() => setActiveFilter(activeFilter === 'done' ? 'all_active' : 'done')}
-          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${activeFilter === 'done'
-              ? 'bg-[#0e4d2a] text-white border-[#0e4d2a] shadow-md ring-2 ring-[#0e4d2a]/30'
-              : 'bg-white border-slate-200/90 text-slate-800 hover:border-emerald-400 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-xs font-bold ${activeFilter === 'done' ? 'text-emerald-100' : 'text-emerald-700'}`}>
-              3. Trial Verification
-            </span>
-            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${activeFilter === 'done' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-              {submittedWaitingVerify.length}
-            </span>
-          </div>
-          <div className="text-2xl font-black font-mono tracking-tight">{submittedWaitingVerify.length}</div>
-          <p className={`text-[11px] mt-0.5 ${activeFilter === 'done' ? 'text-emerald-200' : 'text-slate-400'}`}>
-            Supervisor checking
-          </p>
-        </button>
+          <button
+            onClick={() => setScopeFilter('my_assigned')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${scopeFilter === 'my_assigned'
+              ? 'bg-[#0e4d2a] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>My Dispatched Jobs Only</span>
+          </button>
 
-        <button
-          onClick={() => setActiveFilter('all_active')}
-          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${activeFilter === 'all_active'
-              ? 'bg-[#0e4d2a] text-white border-[#0e4d2a] shadow-md ring-2 ring-[#0e4d2a]/30'
-              : 'bg-white border-slate-200/90 text-slate-800 hover:border-emerald-400 shadow-xs'
-            }`}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-xs font-bold ${activeFilter === 'all_active' ? 'text-emerald-100' : 'text-slate-700'}`}>
-              All Active Work Orders
+          {user?.roles?.includes('ADMIN') && (
+            <button
+              onClick={() => setScopeFilter('all_plant')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${scopeFilter === 'all_plant'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+            >
+              <span>All Plant Work Orders</span>
+            </button>
+          )}
+
+          {isPureMechanic && (
+            <span className="text-[11px] font-mono text-emerald-800 font-semibold bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-xl">
+              🔒 Scoped to {user?.sectionName || 'My Jobs'} • Other sections hidden
             </span>
-            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${activeFilter === 'all_active' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-              }`}>
-              {allOpen.length}
-            </span>
-          </div>
-          <div className="text-2xl font-black font-mono tracking-tight">{allOpen.length}</div>
-          <p className={`text-[11px] mt-0.5 ${activeFilter === 'all_active' ? 'text-emerald-200' : 'text-slate-400'}`}>
-            Current plant load
-          </p>
-        </button>
+          )}
+        </div>
+
+        <div className="text-xs text-slate-500 font-medium">
+          Showing <strong className="text-slate-900 font-mono">{mechanicTickets.length}</strong> work orders in current scope
+        </div>
+      </div>
+
+      {/* 3 Subsections: Active Work | Pending | Completed */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-2.5 shadow-xs">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveSubsection('active')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeSubsection === 'active'
+              ? 'bg-[#0e4d2a] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Active Work ({activeWorkTickets.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubsection('pending')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeSubsection === 'pending'
+              ? 'bg-[#0e4d2a] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <span>Pending ({pendingTickets.length})</span>
+            {pendingTickets.filter(t => t.currentStatus === 'ASSIGNED').length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveSubsection('completed')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeSubsection === 'completed'
+              ? 'bg-[#0e4d2a] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Completed ({completedTickets.length})</span>
+          </button>
+        </div>
+
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search work orders, machines, reasons..."
+            className="bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0e4d2a] w-full sm:w-64"
+          />
+        </div>
       </div>
 
       {/* WORK ORDER LIST (Crisp White Cards with One-Touch Big Buttons) */}
       <div className="space-y-3.5">
         <div className="flex items-center justify-between px-1">
           <div className="text-xs text-slate-500 font-medium">
-            Showing <strong className="text-slate-900">{displayedTickets.length}</strong> active work orders
-            {activeFilter !== 'all_active' && <span className="ml-1 text-emerald-800 font-bold">(filtered)</span>}
+            Showing <strong className="text-slate-900 font-mono">{displayedTickets.length}</strong> {activeSubsection === 'active' ? 'active work orders' : activeSubsection === 'pending' ? 'pending work orders' : 'completed work orders'}
           </div>
-          {activeFilter !== 'all_active' && (
+          {searchTerm && (
             <button
-              onClick={() => setActiveFilter('all_active')}
+              onClick={() => setSearchTerm('')}
               className="text-xs text-emerald-800 font-bold hover:underline"
             >
-              Clear Filter
+              Clear Search
             </button>
           )}
         </div>
@@ -266,8 +336,14 @@ export default function MechanicPortal() {
                   <h3 className="font-black text-base text-slate-900 group-hover:text-emerald-800 transition-colors leading-snug">
                     {t.machineCode} — {t.machineName}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {t.departmentName} • Category: <strong className="text-slate-700">{t.categoryName}</strong>
+                  <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <span>{t.departmentName}</span>
+                    {t.sectionName && (
+                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold">
+                        {t.sectionName}
+                      </span>
+                    )}
+                    <span>• Category: <strong className="text-slate-700">{t.categoryName}</strong></span>
                   </p>
                 </div>
 
@@ -289,6 +365,13 @@ export default function MechanicPortal() {
 
                 {/* Specific 1-Click Action for this stage */}
                 <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setSelectedSlipTicketId(t.ticketId)}
+                    className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    title="Print Standard Breakdown Coupon & Job Card"
+                  >
+                    <Printer className="w-4 h-4 text-slate-600" />
+                  </button>
                   {(() => {
                     const canActOnTicket = user?.roles?.includes('ADMIN') || (user?.mechanicId && (t.assignedMechanicId === user.mechanicId || t.assignedMechanicName === user.employeeName));
 
@@ -371,17 +454,23 @@ export default function MechanicPortal() {
             </div>
           ))}
 
-        {displayedTickets.length === 0 && (
-          <div className="col-span-full py-16 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-slate-300">
-            <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-2.5" />
-            <p className="text-sm font-bold text-slate-800">No active work orders in this category</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Your maintenance workbench is clear. New breakdown dispatches will appear here instantly.
-            </p>
-          </div>
-        )}
+          {displayedTickets.length === 0 && (
+            <div className="col-span-full py-16 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-slate-300">
+              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-2.5" />
+              <p className="text-sm font-bold text-slate-800">
+                {activeSubsection === 'pending' ? 'No pending work orders waiting for action' :
+                  activeSubsection === 'completed' ? 'No completed work orders in this view' :
+                    'No active work orders currently in repair'}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeSubsection === 'pending' ? 'Newly dispatched breakdowns and those awaiting verification will show here.' :
+                  activeSubsection === 'completed' ? 'Your completed repairs and historical jobs are archived here.' :
+                    'Your workbench is clear. Accept pending jobs to start active labor.'}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
 
       {/* Ticket Detail Modal */}
       {selectedTicketId && (
@@ -389,6 +478,14 @@ export default function MechanicPortal() {
           ticketId={selectedTicketId}
           onClose={() => setSelectedTicketId(null)}
           onRefresh={loadData}
+        />
+      )}
+
+      {/* Breakdown Coupon / Intimation Slip Modal */}
+      {selectedSlipTicketId && (
+        <BreakdownSlipModal
+          ticketId={selectedSlipTicketId}
+          onClose={() => setSelectedSlipTicketId(null)}
         />
       )}
 
