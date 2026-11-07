@@ -81,10 +81,12 @@ BEGIN
         MobileNumber NVARCHAR(20),
         Email NVARCHAR(150),
         DepartmentId INT NOT NULL,
+        SectionId INT NULL,
         Designation NVARCHAR(100),
         IsActive BIT NOT NULL DEFAULT 1,
         CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-        CONSTRAINT FK_Employees_Departments FOREIGN KEY (DepartmentId) REFERENCES Departments(DepartmentId)
+        CONSTRAINT FK_Employees_Departments FOREIGN KEY (DepartmentId) REFERENCES Departments(DepartmentId),
+        CONSTRAINT FK_Employees_Sections FOREIGN KEY (SectionId) REFERENCES ProductionSections(SectionId)
     );
 END
 GO
@@ -146,11 +148,13 @@ BEGIN
     CREATE TABLE Mechanics (
         MechanicId INT IDENTITY(1,1) PRIMARY KEY,
         EmployeeId INT NOT NULL UNIQUE,
+        SectionId INT NULL,
         Specialization NVARCHAR(150),
         ShiftName NVARCHAR(50),
         IsAvailable BIT NOT NULL DEFAULT 1,
         ActiveTicketCount INT NOT NULL DEFAULT 0,
-        CONSTRAINT FK_Mechanics_Employees FOREIGN KEY (EmployeeId) REFERENCES Employees(EmployeeId)
+        CONSTRAINT FK_Mechanics_Employees FOREIGN KEY (EmployeeId) REFERENCES Employees(EmployeeId),
+        CONSTRAINT FK_Mechanics_Sections FOREIGN KEY (SectionId) REFERENCES ProductionSections(SectionId)
     );
 END
 GO
