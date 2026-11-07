@@ -27,6 +27,7 @@ public class MBMSDbContext : DbContext
     public DbSet<TicketWorkSession> TicketWorkSessions => Set<TicketWorkSession>();
     public DbSet<SparePart> SpareParts => Set<SparePart>();
     public DbSet<PartUsed> PartsUsed => Set<PartUsed>();
+    public DbSet<SparePartTransaction> SparePartTransactions => Set<SparePartTransaction>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<TicketApproval> TicketApprovals => Set<TicketApproval>();
     public DbSet<TicketSignature> TicketSignatures => Set<TicketSignature>();
@@ -55,6 +56,7 @@ public class MBMSDbContext : DbContext
         modelBuilder.Entity<Machine>().HasKey(e => e.MachineId);
         modelBuilder.Entity<BreakdownCategory>().HasKey(e => e.CategoryId);
         modelBuilder.Entity<SparePart>().HasKey(e => e.PartId);
+        modelBuilder.Entity<SparePartTransaction>().HasKey(e => e.TransactionId);
         modelBuilder.Entity<TicketAttachment>().HasKey(e => e.AttachmentId);
         modelBuilder.Entity<TicketComment>().HasKey(e => e.CommentId);
         modelBuilder.Entity<TicketStatusHistory>().HasKey(e => e.HistoryId);
@@ -75,6 +77,29 @@ public class MBMSDbContext : DbContext
             .HasOne(ur => ur.Role)
             .WithMany(r => r.UserRoles)
             .HasForeignKey(ur => ur.RoleId);
+
+        // Employee Section & Department
+        modelBuilder.Entity<Employee>(entity =>
+        {
+            entity.HasOne(e => e.Department)
+                .WithMany(d => d.Employees)
+                .HasForeignKey(e => e.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Section)
+                .WithMany()
+                .HasForeignKey(e => e.SectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Mechanic Section
+        modelBuilder.Entity<Mechanic>(entity =>
+        {
+            entity.HasOne(m => m.Section)
+                .WithMany()
+                .HasForeignKey(m => m.SectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         // BreakdownTicket
         modelBuilder.Entity<BreakdownTicket>(entity =>

@@ -118,6 +118,26 @@ public class PartUsed
     public SparePart? Part { get; set; }
 }
 
+public class SparePartTransaction
+{
+    public long TransactionId { get; set; }
+    public int PartId { get; set; }
+    public string TransactionType { get; set; } = "INWARD"; // INWARD or OUTWARD
+    public decimal Quantity { get; set; }
+    public decimal UnitPrice { get; set; } = 0.00m;
+    public string? ReferenceNo { get; set; }
+    public string? SupplierOrSource { get; set; }
+    public string? Remarks { get; set; }
+    public int? MachineId { get; set; }
+    public int? MechanicId { get; set; }
+    public DateTime TransactionDate { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+
+    public SparePart? Part { get; set; }
+    public Machine? Machine { get; set; }
+    public Mechanic? Mechanic { get; set; }
+}
+
 public class TicketAttachment
 {
     public long AttachmentId { get; set; }
@@ -248,4 +268,3 @@ public class SystemSetting
     public string SettingValue { get; set; } = string.Empty;
     public string? Description { get; set; }
 }
-

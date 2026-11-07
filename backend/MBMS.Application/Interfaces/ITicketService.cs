@@ -12,6 +12,8 @@ public interface ITicketService
         string? priority = null,
         DateTime? fromDate = null,
         DateTime? toDate = null,
+        int? departmentId = null,
+        int? sectionId = null,
         CancellationToken ct = default);
 
     Task<TicketDetailDto?> GetTicketByIdAsync(long ticketId, CancellationToken ct = default);
@@ -29,4 +31,3 @@ public interface ITicketService
     Task<TicketDetailDto> CancelTicketAsync(long ticketId, int changedByEmployeeId, CancelTicketRequest request, CancellationToken ct = default);
     Task<TicketCommentDto> AddCommentAsync(long ticketId, int employeeId, AddCommentRequest request, CancellationToken ct = default);
 }
-
