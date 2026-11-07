@@ -34,11 +34,15 @@ public class TicketService : ITicketService
         string? priority = null,
         DateTime? fromDate = null,
         DateTime? toDate = null,
+        int? departmentId = null,
+        int? sectionId = null,
         CancellationToken ct = default)
     {
         var query = _db.BreakdownTickets
             .Include(t => t.Machine)
                 .ThenInclude(m => m!.Department)
+            .Include(t => t.Machine)
+                .ThenInclude(m => m!.Section)
             .Include(t => t.Category)
             .Include(t => t.Assignments.Where(a => a.IsCurrent))
                 .ThenInclude(a => a.Mechanic)
@@ -68,6 +72,12 @@ public class TicketService : ITicketService
         if (toDate.HasValue)
             query = query.Where(t => t.BreakdownOccurredAt <= toDate.Value);
 
+        if (departmentId.HasValue)
+            query = query.Where(t => t.Machine != null && t.Machine.DepartmentId == departmentId.Value);
+
+        if (sectionId.HasValue)
+            query = query.Where(t => t.Machine != null && t.Machine.SectionId == sectionId.Value);
+
         var now = DateTime.UtcNow;
 
         var list = await query
@@ -79,7 +89,11 @@ public class TicketService : ITicketService
                 t.MachineId,
                 MachineCode = t.Machine != null ? t.Machine.MachineCode : "",
                 MachineName = t.Machine != null ? t.Machine.MachineName : "",
+                DepartmentId = t.Machine != null ? (int?)t.Machine.DepartmentId : null,
                 DepartmentName = t.Machine != null && t.Machine.Department != null ? t.Machine.Department.DepartmentName : "",
+                SectionId = t.Machine != null ? t.Machine.SectionId : null,
+                SectionCode = t.Machine != null && t.Machine.Section != null ? t.Machine.Section.SectionCode : null,
+                SectionName = t.Machine != null && t.Machine.Section != null ? t.Machine.Section.SectionName : null,
                 CategoryName = t.Category != null ? t.Category.CategoryName : "",
                 t.BreakdownOccurredAt,
                 t.ReportedAt,
@@ -108,7 +122,11 @@ public class TicketService : ITicketService
                 MachineId = t.MachineId,
                 MachineCode = t.MachineCode,
                 MachineName = t.MachineName,
+                DepartmentId = t.DepartmentId,
                 DepartmentName = t.DepartmentName,
+                SectionId = t.SectionId,
+                SectionCode = t.SectionCode,
+                SectionName = t.SectionName,
                 CategoryName = t.CategoryName,
                 BreakdownOccurredAt = t.BreakdownOccurredAt,
                 ReportedAt = t.ReportedAt,
@@ -150,6 +168,19 @@ public class TicketService : ITicketService
         var machine = await _db.Machines.FindAsync(new object[] { request.MachineId }, ct);
         if (machine == null)
             throw new ArgumentException($"Machine with ID {request.MachineId} not found.");
+
+        var supervisor = await _db.Employees
+            .Include(e => e.Section)
+            .Include(e => e.Department)
+            .FirstOrDefaultAsync(e => e.EmployeeId == supervisorEmployeeId, ct);
+
+        if (supervisor != null && supervisor.SectionId.HasValue && machine.SectionId.HasValue)
+        {
+            if (machine.SectionId.Value != supervisor.SectionId.Value)
+            {
+                throw new InvalidOperationException($"Access Denied: You are assigned to section '{supervisor.Section?.SectionName}' and cannot report breakdowns for machine '{machine.MachineCode}' located in another section.");
+            }
+        }
 
         var category = await _db.BreakdownCategories.FindAsync(new object[] { request.CategoryId }, ct);
         if (category == null)
@@ -1086,6 +1117,8 @@ public class TicketService : ITicketService
         return _db.BreakdownTickets
             .Include(t => t.Machine)
                 .ThenInclude(m => m!.Department)
+            .Include(t => t.Machine)
+                .ThenInclude(m => m!.Section)
             .Include(t => t.Supervisor)
             .Include(t => t.Category)
             .Include(t => t.Assignments)
@@ -1171,6 +1204,9 @@ public class TicketService : ITicketService
             MachineCriticality = t.Machine?.Criticality ?? "MEDIUM",
             DepartmentId = t.Machine?.DepartmentId ?? 0,
             DepartmentName = t.Machine?.Department?.DepartmentName ?? "",
+            SectionId = t.Machine?.SectionId,
+            SectionCode = t.Machine?.Section?.SectionCode,
+            SectionName = t.Machine?.Section?.SectionName,
             SupervisorId = t.SupervisorId,
             SupervisorName = t.Supervisor?.EmployeeName ?? "",
             SupervisorMobile = t.Supervisor?.MobileNumber,
@@ -1308,4 +1344,3 @@ public class TicketService : ITicketService
         };
     }
 }
-
