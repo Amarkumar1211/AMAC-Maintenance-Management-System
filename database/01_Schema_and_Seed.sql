@@ -696,7 +696,7 @@ IF NOT EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'CompanyName')
 BEGIN
     INSERT INTO SystemSettings (SettingKey, SettingValue, Description) VALUES
     ('CompanyName', 'Industrial Precision Manufacturing Ltd.', 'Company legal name displayed on reports'),
-    ('FacilityName', 'Plant #1 - Main Manufacturing Complex', 'Factory site identifier'),
+    ('FacilityName', 'Unit 5 (U5) - Manufacturing Complex', 'Factory site identifier'),
     ('TicketPrefix', 'BD', 'Prefix for breakdown ticket numbering'),
     ('StorageBasePath', 'D:\MBMSData', 'Root path for local file storage'),
     ('MaxUploadSizeMB', '10', 'Maximum attachment size in megabytes'),
