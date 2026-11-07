@@ -17,7 +17,10 @@ export default function App() {
 
   useEffect(() => {
     if (user?.roles) {
-      if (user.roles.includes('SUPERVISOR')) {
+      if (user.roles.includes('ADMIN')) {
+        // Admin default
+        setActiveTab('supervisor');
+      } else if (user.roles.includes('SUPERVISOR')) {
         setActiveTab('supervisor');
       } else if (user.roles.includes('MAINTENANCE_INCHARGE')) {
         setActiveTab('incharge');
@@ -28,6 +31,19 @@ export default function App() {
       }
     }
   }, [user]);
+
+  const handleTabChange = (newTab) => {
+    if (user?.roles?.includes('ADMIN')) {
+      setActiveTab(newTab);
+    } else if (user?.roles?.includes('SUPERVISOR')) {
+      if (['supervisor', 'reports'].includes(newTab)) setActiveTab(newTab);
+    } else if (user?.roles?.includes('MECHANIC')) {
+      if (['mechanic'].includes(newTab)) setActiveTab(newTab);
+    } else if (user?.roles?.includes('MAINTENANCE_INCHARGE')) {
+      if (['incharge', 'supervisor', 'reports'].includes(newTab)) setActiveTab(newTab);
+    }
+    setMobileMenuOpen(false);
+  };
 
   if (loading) {
     return (
@@ -43,24 +59,25 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6] text-slate-900 flex flex-col font-sans">
+    <div className="h-screen max-h-screen overflow-hidden bg-[#f4f7f6] text-slate-900 flex flex-col font-sans">
       {/* Top Header Navbar with Theme Styling */}
-      <Navbar 
-        activeTab={activeTab} 
-        onTabChange={(tab) => { setActiveTab(tab); setMobileMenuOpen(false); }}
+      <Navbar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
         onToggleMobileSidebar={() => setMobileMenuOpen(prev => !prev)}
       />
 
-      {/* Main Container with Sidebar + Content Canvas */}
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          activeTab={activeTab} 
-          onTabChange={(tab) => { setActiveTab(tab); setMobileMenuOpen(false); }}
+      {/* Main Container with Fixed Sidebar + Scrollable Main Content */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
           mobileOpen={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
+          user={user}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#f4f7f6]">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#f4f7f6] min-h-0">
           {activeTab === 'supervisor' && <SupervisorPortal />}
           {activeTab === 'incharge' && <MaintenancePortal />}
           {activeTab === 'mechanic' && <MechanicPortal />}
@@ -69,7 +86,7 @@ export default function App() {
         </main>
       </div>
 
-      <footer className="border-t border-slate-200 bg-white py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 font-mono">
+      <footer className="shrink-0 border-t border-slate-200 bg-white py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 font-mono">
         <div>
           <span className="font-bold text-emerald-800">AMAC MBMS</span> • Asiaan Metals & Aluminium Casting Pvt Ltd — Unit 5 (U5)
         </div>

@@ -7,6 +7,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeSectionFilter, setActiveSectionFilter] = useState('ALL');
 
   useEffect(() => {
     const initAuth = async () => {
@@ -19,6 +20,11 @@ export function AuthProvider({ children }) {
       try {
         const profile = await AuthAPI.getCurrentUser();
         setUser(profile);
+        if (profile?.sectionId) {
+          setActiveSectionFilter(profile.sectionId.toString());
+        } else {
+          setActiveSectionFilter('ALL');
+        }
         startSignalR();
       } catch (err) {
         console.warn('Failed to load current user profile:', err);
@@ -41,7 +47,7 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const res = await AuthAPI.login(username, password);
     setAuthToken(res.token);
-    setUser({
+    const userData = {
       userId: res.userId,
       employeeId: res.employeeId,
       employeeCode: res.employeeCode,
@@ -49,9 +55,18 @@ export function AuthProvider({ children }) {
       designation: res.designation,
       departmentId: res.departmentId,
       departmentName: res.departmentName,
+      sectionId: res.sectionId,
+      sectionCode: res.sectionCode,
+      sectionName: res.sectionName,
       roles: res.roles,
       mechanicId: res.mechanicId,
-    });
+    };
+    setUser(userData);
+    if (userData.sectionId) {
+      setActiveSectionFilter(userData.sectionId.toString());
+    } else {
+      setActiveSectionFilter('ALL');
+    }
     startSignalR();
     return res;
   };
@@ -59,6 +74,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     removeAuthToken();
     setUser(null);
+    setActiveSectionFilter('ALL');
   };
 
   const hasRole = (role) => {
@@ -67,11 +83,19 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, hasRole, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      logout,
+      hasRole,
+      isAuthenticated: !!user,
+      activeSectionFilter,
+      setActiveSectionFilter
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
-

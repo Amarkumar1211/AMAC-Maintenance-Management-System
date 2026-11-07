@@ -90,8 +90,12 @@ export const MastersAPI = {
   getDepartments: () => apiRequest('/masters/departments'),
   getSections: (departmentId) => apiRequest(`/masters/sections${departmentId ? `?departmentId=${departmentId}` : ''}`),
   getMachines: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    return apiRequest(`/masters/machines?${query}`);
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') query.append(k, v);
+    });
+    const qs = query.toString();
+    return apiRequest(`/masters/machines${qs ? `?${qs}` : ''}`);
   },
   getMachineById: (id) => apiRequest(`/masters/machines/${id}`),
   getMachineByCode: (code) => apiRequest(`/masters/machines/code/${code}`),
@@ -100,6 +104,22 @@ export const MastersAPI = {
   getCategories: () => apiRequest('/masters/categories'),
   getMechanics: (availableOnly) => apiRequest(`/masters/mechanics${availableOnly ? '?availableOnly=true' : ''}`),
   getSpareParts: (search) => apiRequest(`/masters/spare-parts${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  createSparePart: (data) => apiRequest('/masters/spare-parts', 'POST', data),
+  bulkImportSpareParts: (parts) => apiRequest('/masters/spare-parts/bulk', 'POST', parts),
+  getSparePartTransactions: (type, partId) => {
+    const q = new URLSearchParams();
+    if (type) q.append('type', type);
+    if (partId) q.append('partId', partId);
+    const qs = q.toString();
+    return apiRequest(`/masters/spare-parts/transactions${qs ? `?${qs}` : ''}`);
+  },
+  addSparePartTransaction: (data) => apiRequest('/masters/spare-parts/transactions', 'POST', data),
+  bulkImportMachines: (machines) => apiRequest('/masters/machines/bulk', 'POST', machines),
+  getSupervisors: () => apiRequest('/masters/supervisors'),
+  createSupervisor: (data) => apiRequest('/masters/supervisors', 'POST', data),
+  bulkImportSupervisors: (supervisors) => apiRequest('/masters/supervisors/bulk', 'POST', supervisors),
+  createMechanic: (data) => apiRequest('/masters/mechanics', 'POST', data),
+  bulkImportMechanics: (mechanics) => apiRequest('/masters/mechanics/bulk', 'POST', mechanics),
   getShifts: () => apiRequest('/masters/shifts'),
 };
 
@@ -130,7 +150,7 @@ export const ReportsAPI = {
     if (priority) q.append('priority', priority);
     return apiRequest(`/reports/sla?${q.toString()}`);
   },
-  getRepeatBreakdowns: (rollingDays = 30, minOccurrences = 2) => 
+  getRepeatBreakdowns: (rollingDays = 30, minOccurrences = 2) =>
     apiRequest(`/reports/repeat-breakdowns?rollingDays=${rollingDays}&minOccurrences=${minOccurrences}`),
   getShifts: (fromDate, toDate) => {
     const q = new URLSearchParams();
@@ -145,4 +165,3 @@ export const ReportsAPI = {
     return `${API_BASE}/reports/export-csv?${q.toString()}`;
   }
 };
-

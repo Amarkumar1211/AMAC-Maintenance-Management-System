@@ -2,18 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   LogOut,
-  ChevronDown,
   Search,
-  UserCheck,
-  CheckCircle2,
   Calendar,
-  Menu
+  Menu,
+  Layers
 } from 'lucide-react';
 
 export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }) {
-  const { user, logout, login } = useAuth();
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
-  const [switching, setSwitching] = useState(false);
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Current formatted date matching sample format (DD/MM/YYYY)
@@ -26,25 +22,6 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
     const y = today.getFullYear();
     setCurrentDate(`${d}/${m}/${y}`);
   }, []);
-
-  const quickRoles = [
-    { label: 'Plant Admin (Rajesh Sharma)', username: 'admin', pass: 'Admin@123', role: 'ADMIN', color: 'text-emerald-700 font-bold' },
-    { label: 'Supervisor (Amit Verma)', username: 'supervisor1', pass: 'Supervisor@123', role: 'SUPERVISOR', color: 'text-sky-700 font-bold' },
-    { label: 'Incharge (Manoj Kumar)', username: 'incharge1', pass: 'Incharge@123', role: 'MAINTENANCE_INCHARGE', color: 'text-teal-700 font-bold' },
-    { label: 'Technician (Ramesh Yadav)', username: 'mech1', pass: 'Mechanic@123', role: 'MECHANIC', color: 'text-amber-700 font-bold' },
-  ];
-
-  const handleQuickSwitch = async (account) => {
-    setSwitching(true);
-    setRoleMenuOpen(false);
-    try {
-      await login(account.username, account.pass);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSwitching(false);
-    }
-  };
 
   return (
     <header className="bg-[#0a4423] border-b border-[#07351b] sticky top-0 z-40 select-none shadow-md">
@@ -98,43 +75,16 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
               <span className="text-[10px] text-emerald-300 font-mono">({user?.roles?.[0] || 'User'})</span>
             </div>
 
-            {/* Quick Switch Role Dropdown (Desktop) */}
-            <div className="relative">
-              <button
-                onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#07351b] hover:bg-[#0e522b] border border-emerald-700/60 text-xs text-white transition-all"
-                title="Switch Indian factory user role"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
-                <span className="hidden xl:inline text-xs font-medium">Switch User</span>
-                <ChevronDown className="w-3 h-3 text-emerald-300" />
-              </button>
-
-              {roleMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white border border-slate-200 shadow-2xl py-2 z-50 text-slate-800">
-                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 flex items-center gap-1">
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
-                    Indian Factory Personnel Login
-                  </div>
-                  {quickRoles.map((r) => (
-                    <button
-                      key={r.username}
-                      disabled={switching}
-                      onClick={() => handleQuickSwitch(r)}
-                      className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-emerald-50 transition-colors ${
-                        user?.username === r.username ? 'bg-emerald-50/80 font-semibold' : 'text-slate-700'
-                      }`}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-slate-800">{r.label}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">user: {r.username}</span>
-                      </div>
-                      {user?.username === r.username && (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
+            {/* User Assigned Section Badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#07351b]/80 border border-emerald-500/40 text-emerald-100 text-xs font-semibold shadow-inner">
+              <Layers className="w-3.5 h-3.5 text-emerald-300" />
+              <span className="truncate max-w-[170px]">
+                {user?.sectionName ? user.sectionName : (user?.departmentName || 'All Plant Sections')}
+              </span>
+              {user?.sectionCode && (
+                <span className="text-[10px] bg-emerald-800 text-emerald-200 px-1.5 py-0.5 rounded font-mono font-bold">
+                  {user.sectionCode}
+                </span>
               )}
             </div>
 
