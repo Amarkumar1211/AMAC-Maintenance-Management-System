@@ -29,11 +29,11 @@ echo   * Web Portal (Frontend):  http://localhost:5103
 echo   * Backend REST API:       http://localhost:5102
 echo   * Factory LAN Access:     http://0.0.0.0:5103
 echo.
-echo   PRE-CONFIGURED INDIAN FACTORY DEMO ACCOUNTS:
-echo   - Plant Administrator:    admin        / Admin@123   (Rajesh Sharma)
-echo   - Shift Supervisor:       supervisor1  / Supervisor@123 (Amit Verma)
-echo   - Maintenance Incharge:   incharge1    / Incharge@123   (Manoj Kumar)
-echo   - Electrical Technician:  mech1        / Mechanic@123   (Ramesh Yadav)
+echo   ROLE-BASED FACTORY DEMO ACCOUNTS:
+echo   - Production Supervisor:  supervisor   / Supervisor@123
+echo   - Maintenance Mechanic:   mechanic     / Mechanic@123
+echo   - Maintenance Incharge:   incharge     / Incharge@123
+echo   - Plant Administrator:    admin        / Admin@123
 echo =======================================================================
 echo.
 echo Press any key to exit this launcher window. Services will remain running.
