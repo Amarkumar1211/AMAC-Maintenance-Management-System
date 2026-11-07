@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MBMS.Application.DTOs;
 using MBMS.Application.Interfaces;
 using MBMS.Domain.Enums;
@@ -35,11 +36,23 @@ public class MastersController : ControllerBase
     [HttpGet("machines")]
     public async Task<IActionResult> GetMachines(
         [FromQuery] int? departmentId,
+        [FromQuery] int? sectionId,
         [FromQuery] string? criticality,
         [FromQuery] bool? activeOnly,
         CancellationToken ct)
     {
-        return Ok(await _masterService.GetMachinesAsync(departmentId, criticality, activeOnly, ct));
+        // Enforce section-wise role isolation:
+        // A supervisor can ONLY see machines belonging to their own assigned section
+        if (User.IsInRole(DomainConstants.RoleSupervisor))
+        {
+            var userSecClaim = User.FindFirstValue("SectionId");
+            if (int.TryParse(userSecClaim, out var sId) && sId > 0)
+            {
+                sectionId = sId;
+            }
+        }
+
+        return Ok(await _masterService.GetMachinesAsync(departmentId, sectionId, criticality, activeOnly, ct));
     }
 
     [HttpGet("machines/{id:int}")]
@@ -115,5 +128,97 @@ public class MastersController : ControllerBase
     {
         return Ok(await _masterService.GetShiftsAsync(ct));
     }
-}
 
+    [HttpPost("machines/bulk")]
+    [Authorize(Roles = DomainConstants.RoleAdmin)]
+    public async Task<IActionResult> BulkImportMachines([FromBody] List<MachineDto> machines, CancellationToken ct)
+    {
+        if (machines == null || machines.Count == 0)
+            return BadRequest(new { Message = "No machine data provided for import." });
+        var created = await _masterService.BulkImportMachinesAsync(machines, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("spare-parts")]
+    [Authorize(Roles = $"{DomainConstants.RoleAdmin},{DomainConstants.RoleMaintenanceIncharge}")]
+    public async Task<IActionResult> CreateSparePart([FromBody] SparePartDto dto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.PartCode) || string.IsNullOrWhiteSpace(dto.PartName))
+            return BadRequest(new { Message = "Part Code and Part Name are required." });
+        var created = await _masterService.CreateSparePartAsync(dto, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("spare-parts/bulk")]
+    [Authorize(Roles = $"{DomainConstants.RoleAdmin},{DomainConstants.RoleMaintenanceIncharge}")]
+    public async Task<IActionResult> BulkImportSpareParts([FromBody] List<SparePartDto> parts, CancellationToken ct)
+    {
+        if (parts == null || parts.Count == 0)
+            return BadRequest(new { Message = "No spare parts provided for import." });
+        var created = await _masterService.BulkImportSparePartsAsync(parts, ct);
+        return Ok(created);
+    }
+
+    [HttpGet("spare-parts/transactions")]
+    public async Task<IActionResult> GetSparePartTransactions([FromQuery] string? type, [FromQuery] int? partId, CancellationToken ct)
+    {
+        return Ok(await _masterService.GetSparePartTransactionsAsync(type, partId, ct));
+    }
+
+    [HttpPost("spare-parts/transactions")]
+    [Authorize(Roles = $"{DomainConstants.RoleAdmin},{DomainConstants.RoleMaintenanceIncharge},{DomainConstants.RoleSupervisor}")]
+    public async Task<IActionResult> AddSparePartTransaction([FromBody] CreateSparePartTransactionRequest req, CancellationToken ct)
+    {
+        if (req.PartId <= 0 || req.Quantity <= 0)
+            return BadRequest(new { Message = "Part ID and valid quantity greater than 0 are required." });
+        var user = User.Identity?.Name ?? "Store Incharge";
+        var created = await _masterService.AddSparePartTransactionAsync(req, user, ct);
+        return Ok(created);
+    }
+
+    [HttpGet("supervisors")]
+    public async Task<IActionResult> GetSupervisors(CancellationToken ct)
+    {
+        return Ok(await _masterService.GetSupervisorsAsync(ct));
+    }
+
+    [HttpPost("supervisors")]
+    [Authorize(Roles = DomainConstants.RoleAdmin)]
+    public async Task<IActionResult> CreateSupervisor([FromBody] CreateSupervisorRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.EmployeeCode) || string.IsNullOrWhiteSpace(req.EmployeeName))
+            return BadRequest(new { Message = "Employee Code and Name are required." });
+        var created = await _masterService.CreateSupervisorAsync(req, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("supervisors/bulk")]
+    [Authorize(Roles = DomainConstants.RoleAdmin)]
+    public async Task<IActionResult> BulkImportSupervisors([FromBody] List<CreateSupervisorRequest> requests, CancellationToken ct)
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "No supervisor data provided for import." });
+        var created = await _masterService.BulkImportSupervisorsAsync(requests, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("mechanics")]
+    [Authorize(Roles = DomainConstants.RoleAdmin)]
+    public async Task<IActionResult> CreateMechanic([FromBody] CreateMechanicRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.EmployeeCode) || string.IsNullOrWhiteSpace(req.EmployeeName))
+            return BadRequest(new { Message = "Employee Code and Name are required." });
+        var created = await _masterService.CreateMechanicAsync(req, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("mechanics/bulk")]
+    [Authorize(Roles = DomainConstants.RoleAdmin)]
+    public async Task<IActionResult> BulkImportMechanics([FromBody] List<CreateMechanicRequest> requests, CancellationToken ct)
+    {
+        if (requests == null || requests.Count == 0)
+            return BadRequest(new { Message = "No mechanic data provided for import." });
+        var created = await _masterService.BulkImportMechanicsAsync(requests, ct);
+        return Ok(created);
+    }
+}

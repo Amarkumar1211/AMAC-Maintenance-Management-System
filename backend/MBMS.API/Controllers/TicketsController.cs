@@ -28,9 +28,35 @@ public class TicketsController : ControllerBase
         [FromQuery] string? priority,
         [FromQuery] DateTime? fromDate,
         [FromQuery] DateTime? toDate,
+        [FromQuery] int? departmentId,
+        [FromQuery] int? sectionId,
         CancellationToken ct)
     {
-        var tickets = await _ticketService.GetTicketsAsync(status, machineId, supervisorId, mechanicId, priority, fromDate, toDate, ct);
+        // Enforce strict section-wise access control:
+        // A supervisor can ONLY access tickets belonging to their own assigned section
+        if (User.IsInRole(DomainConstants.RoleSupervisor))
+        {
+            var userSectionId = GetCurrentSectionId();
+            if (userSectionId.HasValue && userSectionId.Value > 0)
+            {
+                sectionId = userSectionId.Value;
+            }
+        }
+        else if (User.IsInRole(DomainConstants.RoleMechanic))
+        {
+            var userMechId = GetCurrentMechanicId();
+            var userSectionId = GetCurrentSectionId();
+            if (userMechId.HasValue && userMechId.Value > 0)
+            {
+                mechanicId = userMechId.Value;
+            }
+            else if (userSectionId.HasValue && userSectionId.Value > 0)
+            {
+                sectionId = userSectionId.Value;
+            }
+        }
+
+        var tickets = await _ticketService.GetTicketsAsync(status, machineId, supervisorId, mechanicId, priority, fromDate, toDate, departmentId, sectionId, ct);
         return Ok(tickets);
     }
 
@@ -222,5 +248,11 @@ public class TicketsController : ControllerBase
         if (int.TryParse(val, out var id)) return id;
         return null;
     }
-}
 
+    private int? GetCurrentSectionId()
+    {
+        var val = User.FindFirstValue("SectionId");
+        if (int.TryParse(val, out var id)) return id;
+        return null;
+    }
+}
