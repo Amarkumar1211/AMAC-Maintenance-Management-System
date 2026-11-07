@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
 import SignaturePad from './SignaturePad';
+import BreakdownSlipModal from './BreakdownSlipModal';
 import {
   X,
   Clock,
@@ -31,7 +32,8 @@ import {
   AlertCircle,
   Cpu,
   Package,
-  Eye
+  Eye,
+  Printer
 } from 'lucide-react';
 
 export default function TicketDetailModal({ ticketId, onClose, onRefresh }) {
@@ -39,6 +41,7 @@ export default function TicketDetailModal({ ticketId, onClose, onRefresh }) {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showSlipModal, setShowSlipModal] = useState(false);
 
   // Active view tab inside modal: 'details', 'repair', 'approvals', 'history'
   const [activeTab, setActiveTab] = useState('details');
@@ -412,7 +415,19 @@ export default function TicketDetailModal({ ticketId, onClose, onRefresh }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Standard Breakdown Slip / Coupon Button */}
+            {ticket && (
+              <button
+                onClick={() => setShowSlipModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                title="Print ISO Standard Breakdown Coupon & Intimation Slip"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-800" />
+                <span className="hidden sm:inline">Print Coupon</span>
+              </button>
+            )}
+
             {/* Real-time Downtime Indicator */}
             {ticket && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-mono font-bold">
@@ -1609,6 +1624,15 @@ export default function TicketDetailModal({ ticketId, onClose, onRefresh }) {
         </div>
 
       </div>
+
+      {/* Standard Breakdown Coupon / Work Slip Modal */}
+      {showSlipModal && ticket && (
+        <BreakdownSlipModal
+          ticketId={ticket.ticketId}
+          initialTicket={ticket}
+          onClose={() => setShowSlipModal(false)}
+        />
+      )}
     </div>
   );
 }
