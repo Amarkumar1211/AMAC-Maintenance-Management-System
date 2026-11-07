@@ -109,6 +109,8 @@ flowchart LR
 Execute the SQL scripts in the `database/` directory against your local SQL Server instance (`MBMS_Production`):
 1. `database/01_Schema_and_Seed.sql`
 2. `database/03_Update_Indian_Personnel_and_Config.sql`
+3. `database/04_Section_Wise_Access_Control.sql`
+4. `database/05_Spare_Parts_Ledger_And_Masters.sql`
 
 ### 2. Backend Startup
 ```powershell
@@ -131,12 +133,16 @@ Run `stop.bat` to gracefully terminate both background daemons.
 
 ## 👥 Default Demo Credentials (AMAC Unit 5 - U5)
 
-| Role | Username | Password | Access Portal |
-| :--- | :--- | :--- | :--- |
-| **Plant Administrator** | `admin` | `Admin@123` | Full Access & Master Configuration |
-| **Maintenance Incharge** | `incharge` | `Incharge@123` | Dispatch, Engineering Sign-off & Reports |
-| **Production Supervisor** | `supervisor` | `Supervisor@123` | Breakdown Intake & Trial Verification |
-| **Field Mechanic** | `mechanic` | `Mechanic@123` | Mobile Workbench & Spare Parts Logging |
+| Role | Username | Password | Personnel Name | Access Scope |
+| :--- | :--- | :--- | :--- | :--- |
+| **Plant Administrator** | `admin` | `Admin@123` | Rajesh Sharma | Global All Sections & Masters |
+| **Maintenance Incharge** | `incharge1` | `Incharge@123` | Manoj Kumar | Plant-Wide Dispatch, Sign-off & Reports |
+| **Assembly Supervisor** | `supervisor1` | `Supervisor@123` | Amit Verma | Main Assembly Line 1 Stoppages |
+| **CNC Shop Supervisor** | `supervisor2` | `Supervisor@123` | Suresh Patel | CNC Milling Section Stoppages |
+| **Press Shop Supervisor** | `supervisor3` | `Supervisor@123` | Vikram Joshi | Hydraulic Press Bay A Stoppages |
+| **CNC Field Technician** | `mech1` | `Mechanic@123` | Ramesh Yadav | CNC Milling Bay Workbench |
+| **Press Field Technician** | `mech2` | `Mechanic@123` | Santosh Kumar | Hydraulic Press Bay A Workbench |
+| **Assembly Technician** | `mech3` | `Mechanic@123` | Vikram Singh | Main Assembly Line 1 Workbench |
 
 ---
 
@@ -153,7 +159,7 @@ Run `stop.bat` to gracefully terminate both background daemons.
 ├── deployment/               # IIS web.config, backup automation scripts
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # Stepper, TicketModal, SignaturePad, Badges
+│   │   ├── components/       # Stepper, TicketModal, SignaturePad, Badges, BreakdownSlipModal
 │   │   ├── context/          # JWT Auth Context & Permission Gates
 │   │   ├── pages/            # Supervisor, Maintenance, Mechanic, Admin, Reports
 │   │   └── services/         # Axios/Fetch API client & SignalR subscriber
