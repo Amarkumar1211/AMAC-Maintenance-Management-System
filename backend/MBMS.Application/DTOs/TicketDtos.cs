@@ -28,7 +28,11 @@ public class TicketListDto
     public int MachineId { get; set; }
     public string MachineCode { get; set; } = string.Empty;
     public string MachineName { get; set; } = string.Empty;
+    public int? DepartmentId { get; set; }
     public string DepartmentName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public DateTime BreakdownOccurredAt { get; set; }
     public DateTime ReportedAt { get; set; }
@@ -58,6 +62,9 @@ public class TicketDetailDto
     public string MachineCriticality { get; set; } = "MEDIUM";
     public int DepartmentId { get; set; }
     public string DepartmentName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
     public int SupervisorId { get; set; }
     public string SupervisorName { get; set; } = string.Empty;
     public string? SupervisorMobile { get; set; }
@@ -273,4 +280,3 @@ public class MachineDowntimeDto
     public string? RestorationRemarks { get; set; }
     public double DurationMinutes { get; set; }
 }
-

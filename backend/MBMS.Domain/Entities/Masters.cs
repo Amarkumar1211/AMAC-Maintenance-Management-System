@@ -43,11 +43,13 @@ public class Employee
     public string? MobileNumber { get; set; }
     public string? Email { get; set; }
     public int DepartmentId { get; set; }
+    public int? SectionId { get; set; }
     public string? Designation { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Department? Department { get; set; }
+    public ProductionSection? Section { get; set; }
     public User? User { get; set; }
     public Mechanic? Mechanic { get; set; }
 }
@@ -95,12 +97,14 @@ public class Mechanic
 {
     public int MechanicId { get; set; }
     public int EmployeeId { get; set; }
+    public int? SectionId { get; set; }
     public string? Specialization { get; set; }
     public string? ShiftName { get; set; }
     public bool IsAvailable { get; set; } = true;
     public int ActiveTicketCount { get; set; } = 0;
 
     public Employee? Employee { get; set; }
+    public ProductionSection? Section { get; set; }
     public ICollection<TicketAssignment> Assignments { get; set; } = new List<TicketAssignment>();
     public ICollection<MaintenanceAction> Actions { get; set; } = new List<MaintenanceAction>();
     public ICollection<TicketWorkSession> WorkSessions { get; set; } = new List<TicketWorkSession>();
@@ -152,4 +156,3 @@ public class BreakdownCategory
 
     public ICollection<BreakdownTicket> Tickets { get; set; } = new List<BreakdownTicket>();
 }
-

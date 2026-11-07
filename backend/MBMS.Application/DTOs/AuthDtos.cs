@@ -16,6 +16,9 @@ public class LoginResponse
     public string? Designation { get; set; }
     public int DepartmentId { get; set; }
     public string DepartmentName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
     public List<string> Roles { get; set; } = new();
     public int? MechanicId { get; set; }
 }
@@ -32,7 +35,9 @@ public class UserProfileDto
     public string? Designation { get; set; }
     public int DepartmentId { get; set; }
     public string DepartmentName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
     public List<string> Roles { get; set; } = new();
     public int? MechanicId { get; set; }
 }
-

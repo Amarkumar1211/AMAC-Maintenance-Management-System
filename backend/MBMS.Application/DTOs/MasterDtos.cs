@@ -48,6 +48,11 @@ public class MechanicDto
     public string? MobileNumber { get; set; }
     public string? Specialization { get; set; }
     public string? ShiftName { get; set; }
+    public int? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
     public bool IsAvailable { get; set; }
     public int ActiveTicketCount { get; set; }
 }
@@ -80,3 +85,80 @@ public class ShiftDto
     public TimeSpan EndTime { get; set; }
 }
 
+public class SupervisorDto
+{
+    public int EmployeeId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public int? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public int? SectionId { get; set; }
+    public string? SectionCode { get; set; }
+    public string? SectionName { get; set; }
+    public string? Designation { get; set; }
+    public string? MobileNumber { get; set; }
+    public string? Email { get; set; }
+    public string? Username { get; set; }
+    public string? ShiftName { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class SparePartTransactionDto
+{
+    public long TransactionId { get; set; }
+    public int PartId { get; set; }
+    public string? PartCode { get; set; }
+    public string? PartName { get; set; }
+    public string? Unit { get; set; }
+    public string TransactionType { get; set; } = "INWARD"; // INWARD or OUTWARD
+    public decimal Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal TotalAmount { get; set; }
+    public string? ReferenceNo { get; set; }
+    public string? SupplierOrSource { get; set; }
+    public string? Remarks { get; set; }
+    public int? MachineId { get; set; }
+    public string? MachineCode { get; set; }
+    public string? MachineName { get; set; }
+    public int? MechanicId { get; set; }
+    public string? MechanicName { get; set; }
+    public DateTime TransactionDate { get; set; } = DateTime.UtcNow;
+    public string? CreatedBy { get; set; }
+}
+
+public class CreateSparePartTransactionRequest
+{
+    public int PartId { get; set; }
+    public string TransactionType { get; set; } = "INWARD"; // INWARD or OUTWARD
+    public decimal Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public string? ReferenceNo { get; set; }
+    public string? SupplierOrSource { get; set; }
+    public string? Remarks { get; set; }
+    public int? MachineId { get; set; }
+    public int? MechanicId { get; set; }
+}
+
+public class CreateSupervisorRequest
+{
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public int? DepartmentId { get; set; }
+    public int? SectionId { get; set; }
+    public string? Designation { get; set; }
+    public string? MobileNumber { get; set; }
+    public string? Email { get; set; }
+    public string? Username { get; set; }
+    public string? Password { get; set; }
+    public int? ShiftId { get; set; }
+}
+
+public class CreateMechanicRequest
+{
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? Specialization { get; set; }
+    public string? MobileNumber { get; set; }
+    public int? ShiftId { get; set; }
+}
