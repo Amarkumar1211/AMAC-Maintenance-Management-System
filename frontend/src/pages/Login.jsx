@@ -9,13 +9,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const demoAccounts = [
-    { label: 'Plant Administrator', user: 'admin', pass: 'Admin@123', role: 'Full System Control & Masters' },
-    { label: 'Maintenance Incharge', user: 'incharge1', pass: 'Incharge@123', role: 'Triage, Dispatch & Sign-off' },
-    { label: 'Shift Supervisor', user: 'supervisor1', pass: 'Supervisor@123', role: 'Breakdown Intake & Verification' },
-    { label: 'Field Mechanic', user: 'mech1', pass: 'Mechanic@123', role: 'Mobile Workbench & Repair Log' },
-  ];
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -34,9 +27,60 @@ export default function Login() {
     setPassword(p);
   };
 
+  const sectionCredentials = [
+    {
+      title: 'Plant Admin',
+      section: 'Global All Sections',
+      user: 'admin',
+      pass: 'Admin@123',
+    },
+    {
+      title: 'Maint. Incharge',
+      section: 'Plant-Wide Dispatch',
+      user: 'incharge1',
+      pass: 'Incharge@123',
+    },
+    {
+      title: 'Assembly Sup.',
+      section: 'Main Assembly Line 1',
+      user: 'supervisor1',
+      pass: 'Supervisor@123',
+    },
+    {
+      title: 'CNC Shop Sup.',
+      section: 'CNC Milling Section',
+      user: 'supervisor2',
+      pass: 'Supervisor@123',
+    },
+    {
+      title: 'Press Shop Sup.',
+      section: 'Hydraulic Press Bay A',
+      user: 'supervisor3',
+      pass: 'Supervisor@123',
+    },
+    {
+      title: 'CNC Tech',
+      section: 'CNC Milling Section',
+      user: 'mech1',
+      pass: 'Mechanic@123',
+    },
+    {
+      title: 'Press Tech',
+      section: 'Hydraulic Press Bay A',
+      user: 'mech2',
+      pass: 'Mechanic@123',
+    },
+    {
+      title: 'Assembly Tech',
+      section: 'Main Assembly Line 1',
+      user: 'mech3',
+      pass: 'Mechanic@123',
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-[#f4f7f6] flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-lg space-y-6">
 
         {/* Header with AMAC Logo */}
         <div className="text-center space-y-2">
@@ -65,14 +109,14 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1.5">Employee Username</label>
+              <label className="text-xs font-semibold text-slate-700 block mb-1.5">Employee Username / ID</label>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter employee username (e.g. admin)"
+                  placeholder="Enter username (e.g. supervisor1, mech1, admin)"
                   required
                   className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0e4d2a] focus:bg-white shadow-xs"
                 />
@@ -99,26 +143,33 @@ export default function Login() {
               disabled={submitting}
               className="w-full py-3 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-xs font-bold transition-all shadow-md shadow-[#0e4d2a]/20 flex items-center justify-center gap-2 active:scale-95"
             >
-              {submitting ? 'Authenticating...' : 'Sign In to Workbench'}
+              {submitting ? 'Authenticating...' : 'Sign In to Section Workbench'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          {/* Quick Demo Logins for Shop Floor Roles */}
+          {/* Section-Wise Shop Floor Sign-In Credentials */}
           <div className="pt-4 border-t border-slate-100">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 text-center">
-              Quick Sign-in Credentials
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono mb-2.5 text-center">
+              SECTION-WISE SHOP FLOOR SIGN-IN CREDENTIALS
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {demoAccounts.map(d => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {sectionCredentials.map((c) => (
                 <button
-                  key={d.user}
+                  key={c.user}
                   type="button"
-                  onClick={() => setDemoCreds(d.user, d.pass)}
-                  className="p-2 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-left transition-all"
+                  onClick={() => setDemoCreds(c.user, c.pass)}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    username === c.user
+                      ? 'border-[#1ea751] bg-emerald-50/70 shadow-xs'
+                      : 'border-slate-200 hover:border-emerald-400 hover:bg-slate-50'
+                  }`}
                 >
-                  <div className="font-semibold text-slate-900 text-[11px] truncate">{d.label}</div>
-                  <div className="text-[9px] text-slate-400 font-mono truncate">{d.user} / {d.pass}</div>
+                  <div className="font-bold text-slate-900 text-xs">{c.title}</div>
+                  <div className="text-[10px] text-emerald-800 font-medium truncate">{c.section}</div>
+                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    {c.user} / {c.pass}
+                  </div>
                 </button>
               ))}
             </div>

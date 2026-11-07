@@ -5,6 +5,7 @@ import { subscribeToNotification } from '../services/signalr';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import TicketDetailModal from '../components/TicketDetailModal';
+import BreakdownSlipModal from '../components/BreakdownSlipModal';
 import {
   PlusCircle,
   Search,
@@ -21,18 +22,22 @@ import {
   ChevronRight,
   ShieldCheck,
   Check,
-  ImageIcon
+  ImageIcon,
+  Printer
 } from 'lucide-react';
 
 export default function SupervisorPortal() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('active'); // 'active', 'pending_verification', 'new_ticket'
+  const [activeTab, setActiveTab] = useState('active'); // 'active', 'pending', 'completed', 'new_ticket'
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [selectedSlipTicketId, setSelectedSlipTicketId] = useState(null);
+  const [lastCreatedTicket, setLastCreatedTicket] = useState(null);
 
   // New Breakdown Form States
   const [machines, setMachines] = useState([]);
+  const [sectionMachines, setSectionMachines] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -55,14 +60,31 @@ export default function SupervisorPortal() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const isSupervisor = user?.roles?.includes('SUPERVISOR');
+      const targetSectionId = (isSupervisor || user?.sectionId) ? user?.sectionId : null;
+
+      const machineParams = targetSectionId ? { sectionId: targetSectionId } : {};
+      const ticketParams = targetSectionId ? { sectionId: targetSectionId } : {};
+
       const [tList, mList, cList] = await Promise.all([
-        TicketsAPI.getAll(),
-        MastersAPI.getMachines(),
+        TicketsAPI.getAll(ticketParams),
+        MastersAPI.getMachines(machineParams),
         MastersAPI.getCategories()
       ]);
-      setTickets(tList);
-      setMachines(mList);
-      setCategories(cList);
+
+      // Strictly isolate tickets to supervisor's assigned section
+      const secTickets = (tList || []).filter(t => {
+        if (targetSectionId) {
+          return t.sectionId === targetSectionId || (t.sectionName && user?.sectionName && t.sectionName.toLowerCase() === user.sectionName.toLowerCase());
+        }
+        return true;
+      });
+
+      setTickets(secTickets);
+      const mArray = mList || [];
+      setSectionMachines(mArray);
+      setMachines(mArray);
+      setCategories(cList || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -82,7 +104,7 @@ export default function SupervisorPortal() {
       unsubscribeAssigned();
       unsubscribeStatus();
     };
-  }, []);
+  }, [user?.sectionId, user?.employeeCode, user?.username]);
 
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -120,7 +142,8 @@ export default function SupervisorPortal() {
         attachments: attachedPhotos
       });
 
-      setSuccessMessage(`Ticket ${created.ticketNumber} successfully submitted to Maintenance!`);
+      setLastCreatedTicket(created);
+      setSuccessMessage(`Breakdown Ticket ${created.ticketNumber} successfully submitted to Maintenance Head!`);
       // Reset form
       setSelectedMachineId('');
       setBreakdownReason('');
@@ -135,14 +158,34 @@ export default function SupervisorPortal() {
     }
   };
 
-  const activeTickets = tickets.filter(t => t.currentStatus !== 'CLOSED' && t.currentStatus !== 'CANCELLED');
-  const verificationQueue = tickets.filter(t => t.currentStatus === 'AWAITING_SUPERVISOR');
-  const filteredTickets = (activeTab === 'pending_verification' ? verificationQueue : activeTickets)
-    .filter(t =>
-      t.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.machineCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.breakdownReason.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  // 3 Clear Subsections: Active Work, Pending, Completed
+  const activeWorkTickets = tickets.filter(t =>
+    t.currentStatus === 'IN_PROGRESS' ||
+    t.currentStatus === 'ACCEPTED' ||
+    t.currentStatus === 'ON_HOLD' ||
+    t.currentStatus === 'AWAITING_SUPERVISOR'
+  );
+
+  const pendingTickets = tickets.filter(t =>
+    t.currentStatus === 'NEW' ||
+    t.currentStatus === 'ASSIGNED'
+  );
+
+  const completedTickets = tickets.filter(t =>
+    t.currentStatus === 'CLOSED' ||
+    t.currentStatus === 'AWAITING_INCHARGE'
+  );
+
+  const currentList =
+    activeTab === 'pending' ? pendingTickets :
+      activeTab === 'completed' ? completedTickets :
+        activeWorkTickets;
+
+  const filteredTickets = currentList.filter(t =>
+    t.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.machineCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.breakdownReason.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -158,7 +201,7 @@ export default function SupervisorPortal() {
               Production Dashboard — Shift Breakdown Operations
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Unit 5 (U5) • Shift Supervisor: <span className="font-bold text-emerald-800">{user?.employeeName || 'Amit Verma'}</span>
+              Unit 5 (U5) • Assigned Section: <span className="font-bold text-emerald-800">{user?.sectionName ? `${user.sectionName} (${user.sectionCode || ''})` : (user?.departmentName || 'All Sections')}</span> • Shift Supervisor: <span className="font-bold text-slate-800">{user?.employeeName || 'Amit Verma'}</span>
             </p>
           </div>
         </div>
@@ -183,35 +226,59 @@ export default function SupervisorPortal() {
         </div>
       </div>
 
-      {/* Interactive Tabs & Search Bar */}
+      {/* Section Isolation Status Pill */}
+      {user?.sectionName && (
+        <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-950 font-medium shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#1ea751] animate-pulse shrink-0"></span>
+            <span>
+              Supervisor Access: <strong className="font-bold text-emerald-900">{user.employeeName}</strong> &bull; Section: <strong className="font-bold text-emerald-900">{user.sectionName}</strong>
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-800 font-semibold bg-emerald-100/80 border border-emerald-300/70 px-2.5 py-0.5 rounded-lg shrink-0">
+            🔒 Scoped to {user.sectionCode || 'Section'} • Other sections hidden
+          </span>
+        </div>
+      )}
+
+      {/* 3 Subsections: Active Work | Pending | Completed */}
       {activeTab !== 'new_ticket' && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-2.5 shadow-xs">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('active')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'active'
-                  ? 'bg-[#0e4d2a] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'active'
+                ? 'bg-[#0e4d2a] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Active Stoppages ({activeTickets.length})</span>
+              <span>Active Work ({activeWorkTickets.length})</span>
             </button>
 
             <button
-              onClick={() => setActiveTab('pending_verification')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'pending_verification'
-                  ? 'bg-[#1ea751] text-white shadow-xs ring-2 ring-[#1ea751]/20'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
+              onClick={() => setActiveTab('pending')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'pending'
+                ? 'bg-[#0e4d2a] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              <span>Pending ({pendingTickets.length})</span>
+              {pendingTickets.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('completed')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'completed'
+                ? 'bg-[#0e4d2a] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Needs My Verification ({verificationQueue.length})</span>
-              {verificationQueue.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              )}
+              <span>Completed ({completedTickets.length})</span>
             </button>
           </div>
 
@@ -228,14 +295,26 @@ export default function SupervisorPortal() {
         </div>
       )}
 
-      {/* Success Notification Alert */}
+      {/* Success Notification Alert with Print Intimation Slip Action */}
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs flex items-center justify-between shadow-xs animate-in fade-in">
+        <div className="bg-emerald-50 border-2 border-emerald-300 text-emerald-950 p-4 rounded-2xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <span className="font-bold">{successMessage}</span>
           </div>
-          <button onClick={() => setSuccessMessage('')} className="text-emerald-700 hover:text-emerald-950 font-bold text-sm">×</button>
+          <div className="flex items-center gap-2 shrink-0">
+            {lastCreatedTicket && (
+              <button
+                type="button"
+                onClick={() => setSelectedSlipTicketId(lastCreatedTicket.ticketId)}
+                className="px-3.5 py-1.5 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Breakdown Coupon</span>
+              </button>
+            )}
+            <button onClick={() => setSuccessMessage('')} className="text-emerald-700 hover:text-emerald-950 font-bold text-sm px-2 cursor-pointer">×</button>
+          </div>
         </div>
       )}
 
@@ -275,9 +354,16 @@ export default function SupervisorPortal() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-800 block mb-1.5">
-                    Target Machine *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-800 block">
+                      Target Machine *
+                    </label>
+                    <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md font-bold">
+                      {user?.sectionName
+                        ? `★ ${user.sectionName} (${machines.length} Machines Assigned)`
+                        : `${machines.length} Machines Available`}
+                    </span>
+                  </div>
                   <select
                     value={selectedMachineId}
                     onChange={(e) => {
@@ -291,10 +377,10 @@ export default function SupervisorPortal() {
                     required
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#0e4d2a] shadow-xs"
                   >
-                    <option value="">-- Select Machine from Factory Roster --</option>
+                    <option value="">-- Select Machine from Section Roster --</option>
                     {machines.map(m => (
                       <option key={m.machineId} value={m.machineId}>
-                        {m.machineCode} — {m.machineName} ({m.departmentName}) [{m.criticality}]
+                        ★ {m.machineCode} — {m.machineName} [{m.criticality || 'NORMAL'}]
                       </option>
                     ))}
                   </select>
@@ -464,11 +550,10 @@ export default function SupervisorPortal() {
               <div
                 key={t.ticketId}
                 onClick={() => setSelectedTicketId(t.ticketId)}
-                className={`bg-white rounded-3xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group border ${
-                  needsMyVerification
-                    ? 'border-2 border-emerald-500 ring-2 ring-emerald-500/20'
-                    : 'border-slate-200/90 hover:border-emerald-500/80'
-                }`}
+                className={`bg-white rounded-3xl p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group border ${needsMyVerification
+                  ? 'border-2 border-emerald-500 ring-2 ring-emerald-500/20'
+                  : 'border-slate-200/90 hover:border-emerald-500/80'
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -528,20 +613,42 @@ export default function SupervisorPortal() {
                     </span>
                   </div>
 
-                  {needsMyVerification ? (
+                  <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedTicketId(t.ticketId);
+                        setSelectedSlipTicketId(t.ticketId);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-[11px] font-bold shadow-xs flex items-center gap-1 transition-all active:scale-95"
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-900 text-slate-700 text-[11px] font-bold border border-slate-200 flex items-center gap-1 transition-all cursor-pointer"
+                      title="Print Official Breakdown Intimation Coupon"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Verify & Sign</span>
+                      <Printer className="w-3 h-3 text-emerald-800" />
+                      <span>Slip</span>
                     </button>
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-800 transition-colors" />
-                  )}
+
+                    {needsMyVerification ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTicketId(t.ticketId);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-[11px] font-bold shadow-xs flex items-center gap-1 transition-all active:scale-95"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Verify & Sign</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTicketId(t.ticketId)}
+                        className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 group-hover:text-slate-800 transition-colors cursor-pointer"
+                        title="View details"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -550,8 +657,16 @@ export default function SupervisorPortal() {
           {filteredTickets.length === 0 && (
             <div className="col-span-full py-16 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-slate-300">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-2" />
-              <p className="text-sm font-bold text-slate-800">No active breakdown tickets found</p>
-              <p className="text-xs text-slate-500 mt-1">All production assets in this department are running normally.</p>
+              <p className="text-sm font-bold text-slate-800">
+                {activeTab === 'pending' ? 'No pending breakdown incidents' :
+                  activeTab === 'completed' ? 'No completed incidents logged' :
+                    'No active work orders currently in repair'}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeTab === 'pending' ? 'All reported breakdowns have been dispatched or accepted.' :
+                  activeTab === 'completed' ? 'Resolved incidents will appear here for historical tracking.' :
+                    'All production assets in this section are running normally.'}
+              </p>
             </div>
           )}
         </div>
@@ -563,6 +678,14 @@ export default function SupervisorPortal() {
           ticketId={selectedTicketId}
           onClose={() => setSelectedTicketId(null)}
           onRefresh={loadData}
+        />
+      )}
+
+      {/* Official Printable Breakdown Coupon Modal */}
+      {selectedSlipTicketId && (
+        <BreakdownSlipModal
+          ticketId={selectedSlipTicketId}
+          onClose={() => setSelectedSlipTicketId(null)}
         />
       )}
 
