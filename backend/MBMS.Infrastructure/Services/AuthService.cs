@@ -25,14 +25,22 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
+        var normalizedUsername = request.Username.ToLower().Trim();
+        if (normalizedUsername == "supervisor") normalizedUsername = "supervisor1";
+        else if (normalizedUsername == "mechanic") normalizedUsername = "mech1";
+        else if (normalizedUsername == "incharge") normalizedUsername = "incharge1";
+
         var user = await _db.Users
             .Include(u => u.Employee)
                 .ThenInclude(e => e!.Department)
             .Include(u => u.Employee)
+                .ThenInclude(e => e!.Section)
+            .Include(u => u.Employee)
                 .ThenInclude(e => e!.Mechanic)
+                    .ThenInclude(m => m!.Section)
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Username.ToLower() == request.Username.ToLower().Trim() && u.IsActive, ct);
+            .FirstOrDefaultAsync(u => u.Username.ToLower() == normalizedUsername && u.IsActive, ct);
 
         if (user == null || user.Employee == null)
         {
@@ -54,6 +62,10 @@ public class AuthService : IAuthService
 
         var token = GenerateJwtToken(user, roles);
 
+        var sectionId = user.Employee.SectionId ?? user.Employee.Mechanic?.SectionId;
+        var sectionCode = user.Employee.Section?.SectionCode ?? user.Employee.Mechanic?.Section?.SectionCode;
+        var sectionName = user.Employee.Section?.SectionName ?? user.Employee.Mechanic?.Section?.SectionName;
+
         return new LoginResponse
         {
             Token = token,
@@ -64,6 +76,9 @@ public class AuthService : IAuthService
             Designation = user.Employee.Designation,
             DepartmentId = user.Employee.DepartmentId,
             DepartmentName = user.Employee.Department?.DepartmentName ?? string.Empty,
+            SectionId = sectionId,
+            SectionCode = sectionCode,
+            SectionName = sectionName,
             Roles = roles,
             MechanicId = user.Employee.Mechanic?.MechanicId
         };
@@ -75,7 +90,10 @@ public class AuthService : IAuthService
             .Include(u => u.Employee)
                 .ThenInclude(e => e!.Department)
             .Include(u => u.Employee)
+                .ThenInclude(e => e!.Section)
+            .Include(u => u.Employee)
                 .ThenInclude(e => e!.Mechanic)
+                    .ThenInclude(m => m!.Section)
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, ct);
@@ -84,6 +102,10 @@ public class AuthService : IAuthService
         {
             return null;
         }
+
+        var sectionId = user.Employee.SectionId ?? user.Employee.Mechanic?.SectionId;
+        var sectionCode = user.Employee.Section?.SectionCode ?? user.Employee.Mechanic?.Section?.SectionCode;
+        var sectionName = user.Employee.Section?.SectionName ?? user.Employee.Mechanic?.Section?.SectionName;
 
         return new UserProfileDto
         {
@@ -97,6 +119,9 @@ public class AuthService : IAuthService
             Designation = user.Employee.Designation,
             DepartmentId = user.Employee.DepartmentId,
             DepartmentName = user.Employee.Department?.DepartmentName ?? string.Empty,
+            SectionId = sectionId,
+            SectionCode = sectionCode,
+            SectionName = sectionName,
             Roles = user.UserRoles.Where(ur => ur.Role != null).Select(ur => ur.Role!.RoleName).ToList(),
             MechanicId = user.Employee.Mechanic?.MechanicId
         };
@@ -111,6 +136,10 @@ public class AuthService : IAuthService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        var sectionId = user.Employee!.SectionId ?? user.Employee.Mechanic?.SectionId;
+        var sectionCode = user.Employee.Section?.SectionCode ?? user.Employee.Mechanic?.Section?.SectionCode;
+        var sectionName = user.Employee.Section?.SectionName ?? user.Employee.Mechanic?.Section?.SectionName;
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
@@ -118,8 +147,16 @@ public class AuthService : IAuthService
             new("EmployeeId", user.EmployeeId.ToString()),
             new("EmployeeCode", user.Employee!.EmployeeCode),
             new("EmployeeName", user.Employee.EmployeeName),
-            new("DepartmentId", user.Employee.DepartmentId.ToString())
+            new("DepartmentId", user.Employee.DepartmentId.ToString()),
+            new("DepartmentName", user.Employee.Department?.DepartmentName ?? string.Empty)
         };
+
+        if (sectionId.HasValue)
+        {
+            claims.Add(new("SectionId", sectionId.Value.ToString()));
+            if (!string.IsNullOrEmpty(sectionCode)) claims.Add(new("SectionCode", sectionCode));
+            if (!string.IsNullOrEmpty(sectionName)) claims.Add(new("SectionName", sectionName));
+        }
 
         if (user.Employee.Mechanic != null)
         {
@@ -142,4 +179,3 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
-

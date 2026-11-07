@@ -11,11 +11,13 @@ public class MasterService : IMasterService
 {
     private readonly MBMSDbContext _db;
     private readonly IQRService _qrService;
+    private readonly IPasswordHasher _hasher;
 
-    public MasterService(MBMSDbContext db, IQRService qrService)
+    public MasterService(MBMSDbContext db, IQRService qrService, IPasswordHasher hasher)
     {
         _db = db;
         _qrService = qrService;
+        _hasher = hasher;
     }
 
     public async Task<List<DepartmentDto>> GetDepartmentsAsync(CancellationToken ct = default)
@@ -53,7 +55,7 @@ public class MasterService : IMasterService
             .ToListAsync(ct);
     }
 
-    public async Task<List<MachineDto>> GetMachinesAsync(int? departmentId = null, string? criticality = null, bool? activeOnly = null, CancellationToken ct = default)
+    public async Task<List<MachineDto>> GetMachinesAsync(int? departmentId = null, int? sectionId = null, string? criticality = null, bool? activeOnly = null, CancellationToken ct = default)
     {
         var query = _db.Machines
             .Include(m => m.Department)
@@ -63,6 +65,9 @@ public class MasterService : IMasterService
 
         if (departmentId.HasValue)
             query = query.Where(m => m.DepartmentId == departmentId.Value);
+
+        if (sectionId.HasValue)
+            query = query.Where(m => m.SectionId == sectionId.Value);
 
         if (!string.IsNullOrEmpty(criticality))
             query = query.Where(m => m.Criticality == criticality);
@@ -144,6 +149,10 @@ public class MasterService : IMasterService
     {
         var query = _db.Mechanics
             .Include(m => m.Employee)
+                .ThenInclude(e => e!.Department)
+            .Include(m => m.Employee)
+                .ThenInclude(e => e!.Section)
+            .Include(m => m.Section)
             .AsQueryable();
 
         if (availableOnly.HasValue && availableOnly.Value)
@@ -160,6 +169,11 @@ public class MasterService : IMasterService
                 MobileNumber = m.Employee.MobileNumber,
                 Specialization = m.Specialization,
                 ShiftName = m.ShiftName,
+                DepartmentId = m.Employee.DepartmentId,
+                DepartmentName = m.Employee.Department != null ? m.Employee.Department.DepartmentName : null,
+                SectionId = m.SectionId ?? m.Employee.SectionId,
+                SectionCode = m.Section != null ? m.Section.SectionCode : (m.Employee.Section != null ? m.Employee.Section.SectionCode : null),
+                SectionName = m.Section != null ? m.Section.SectionName : (m.Employee.Section != null ? m.Employee.Section.SectionName : null),
                 IsAvailable = m.IsAvailable,
                 ActiveTicketCount = m.ActiveTicketCount
             })
@@ -255,6 +269,459 @@ public class MasterService : IMasterService
         return await GetMachineByIdAsync(machineId, ct);
     }
 
+    public async Task<List<MachineDto>> BulkImportMachinesAsync(List<MachineDto> dtos, CancellationToken ct = default)
+    {
+        var result = new List<MachineDto>();
+        foreach (var dto in dtos)
+        {
+            if (string.IsNullOrWhiteSpace(dto.MachineCode) || string.IsNullOrWhiteSpace(dto.MachineName))
+                continue;
+
+            var existing = await _db.Machines.FirstOrDefaultAsync(m => m.MachineCode.ToUpper() == dto.MachineCode.Trim().ToUpper(), ct);
+            if (existing != null)
+            {
+                existing.MachineName = dto.MachineName.Trim();
+                if (dto.DepartmentId > 0) existing.DepartmentId = dto.DepartmentId;
+                if (dto.SectionId.HasValue && dto.SectionId.Value > 0) existing.SectionId = dto.SectionId;
+                if (!string.IsNullOrWhiteSpace(dto.MachineCategory)) existing.MachineCategory = dto.MachineCategory;
+                if (!string.IsNullOrWhiteSpace(dto.Criticality)) existing.Criticality = dto.Criticality;
+                if (!string.IsNullOrWhiteSpace(dto.Location)) existing.Location = dto.Location;
+                if (!string.IsNullOrWhiteSpace(dto.Manufacturer)) existing.Manufacturer = dto.Manufacturer;
+                if (!string.IsNullOrWhiteSpace(dto.ModelNumber)) existing.ModelNumber = dto.ModelNumber;
+                if (!string.IsNullOrWhiteSpace(dto.SerialNumber)) existing.SerialNumber = dto.SerialNumber;
+                await _db.SaveChangesAsync(ct);
+                var mapped = await GetMachineByIdAsync(existing.MachineId, ct);
+                if (mapped != null) result.Add(mapped);
+            }
+            else
+            {
+                var created = await CreateMachineAsync(dto, ct);
+                result.Add(created);
+            }
+        }
+        return result;
+    }
+
+    public async Task<SparePartDto> CreateSparePartAsync(SparePartDto dto, CancellationToken ct = default)
+    {
+        var code = dto.PartCode.Trim().ToUpper();
+        var part = new SparePart
+        {
+            PartCode = code,
+            PartName = dto.PartName.Trim(),
+            Unit = !string.IsNullOrWhiteSpace(dto.Unit) ? dto.Unit.Trim().ToUpper() : "NOS",
+            Description = dto.Description,
+            UnitPrice = dto.UnitPrice,
+            StockQuantity = dto.StockQuantity,
+            IsActive = true
+        };
+
+        _db.SpareParts.Add(part);
+        await _db.SaveChangesAsync(ct);
+
+        if (dto.StockQuantity > 0)
+        {
+            _db.SparePartTransactions.Add(new SparePartTransaction
+            {
+                PartId = part.PartId,
+                TransactionType = "INWARD",
+                Quantity = dto.StockQuantity,
+                UnitPrice = dto.UnitPrice,
+                ReferenceNo = "INIT-STOCK",
+                SupplierOrSource = "Initial Catalog Registration",
+                Remarks = "Opening stock recorded on spare creation",
+                TransactionDate = DateTime.UtcNow,
+                CreatedBy = "Store Admin"
+            });
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return new SparePartDto
+        {
+            PartId = part.PartId,
+            PartCode = part.PartCode,
+            PartName = part.PartName,
+            Unit = part.Unit,
+            Description = part.Description,
+            UnitPrice = part.UnitPrice,
+            StockQuantity = part.StockQuantity,
+            IsActive = part.IsActive
+        };
+    }
+
+    public async Task<List<SparePartDto>> BulkImportSparePartsAsync(List<SparePartDto> dtos, CancellationToken ct = default)
+    {
+        var result = new List<SparePartDto>();
+        foreach (var dto in dtos)
+        {
+            if (string.IsNullOrWhiteSpace(dto.PartCode) || string.IsNullOrWhiteSpace(dto.PartName))
+                continue;
+
+            var existing = await _db.SpareParts.FirstOrDefaultAsync(p => p.PartCode.ToUpper() == dto.PartCode.Trim().ToUpper(), ct);
+            if (existing != null)
+            {
+                existing.PartName = dto.PartName.Trim();
+                if (!string.IsNullOrWhiteSpace(dto.Unit)) existing.Unit = dto.Unit.Trim().ToUpper();
+                if (!string.IsNullOrWhiteSpace(dto.Description)) existing.Description = dto.Description;
+                if (dto.UnitPrice > 0) existing.UnitPrice = dto.UnitPrice;
+                if (dto.StockQuantity > 0)
+                {
+                    var diff = dto.StockQuantity - existing.StockQuantity;
+                    existing.StockQuantity = dto.StockQuantity;
+                    if (diff != 0)
+                    {
+                        _db.SparePartTransactions.Add(new SparePartTransaction
+                        {
+                            PartId = existing.PartId,
+                            TransactionType = diff > 0 ? "INWARD" : "OUTWARD",
+                            Quantity = Math.Abs(diff),
+                            UnitPrice = existing.UnitPrice,
+                            ReferenceNo = "BULK-IMPORT-ADJ",
+                            SupplierOrSource = "Bulk Inventory Import",
+                            Remarks = "Stock quantity adjusted via bulk sheet import",
+                            TransactionDate = DateTime.UtcNow,
+                            CreatedBy = "Store Admin"
+                        });
+                    }
+                }
+                await _db.SaveChangesAsync(ct);
+                result.Add(new SparePartDto
+                {
+                    PartId = existing.PartId,
+                    PartCode = existing.PartCode,
+                    PartName = existing.PartName,
+                    Unit = existing.Unit,
+                    Description = existing.Description,
+                    UnitPrice = existing.UnitPrice,
+                    StockQuantity = existing.StockQuantity,
+                    IsActive = existing.IsActive
+                });
+            }
+            else
+            {
+                var created = await CreateSparePartAsync(dto, ct);
+                result.Add(created);
+            }
+        }
+        return result;
+    }
+
+    public async Task<List<SparePartTransactionDto>> GetSparePartTransactionsAsync(string? type = null, int? partId = null, CancellationToken ct = default)
+    {
+        var query = _db.SparePartTransactions
+            .Include(t => t.Part)
+            .Include(t => t.Machine)
+            .Include(t => t.Mechanic)
+                .ThenInclude(m => m!.Employee)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var tNorm = type.Trim().ToUpper();
+            query = query.Where(t => t.TransactionType.ToUpper() == tNorm);
+        }
+
+        if (partId.HasValue && partId.Value > 0)
+        {
+            query = query.Where(t => t.PartId == partId.Value);
+        }
+
+        return await query
+            .OrderByDescending(t => t.TransactionDate)
+            .Select(t => new SparePartTransactionDto
+            {
+                TransactionId = t.TransactionId,
+                PartId = t.PartId,
+                PartCode = t.Part != null ? t.Part.PartCode : string.Empty,
+                PartName = t.Part != null ? t.Part.PartName : string.Empty,
+                Unit = t.Part != null ? t.Part.Unit : "NOS",
+                TransactionType = t.TransactionType,
+                Quantity = t.Quantity,
+                UnitPrice = t.UnitPrice,
+                TotalAmount = t.Quantity * t.UnitPrice,
+                ReferenceNo = t.ReferenceNo,
+                SupplierOrSource = t.SupplierOrSource,
+                Remarks = t.Remarks,
+                MachineId = t.MachineId,
+                MachineCode = t.Machine != null ? t.Machine.MachineCode : null,
+                MachineName = t.Machine != null ? t.Machine.MachineName : null,
+                MechanicId = t.MechanicId,
+                MechanicName = t.Mechanic != null && t.Mechanic.Employee != null ? t.Mechanic.Employee.EmployeeName : null,
+                TransactionDate = t.TransactionDate,
+                CreatedBy = t.CreatedBy
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<SparePartTransactionDto> AddSparePartTransactionAsync(CreateSparePartTransactionRequest req, string createdBy, CancellationToken ct = default)
+    {
+        var part = await _db.SpareParts.FindAsync(new object[] { req.PartId }, ct);
+        if (part == null)
+            throw new InvalidOperationException($"Spare part with ID {req.PartId} not found.");
+
+        var type = req.TransactionType.Trim().ToUpper() == "OUTWARD" ? "OUTWARD" : "INWARD";
+        if (type == "INWARD")
+        {
+            part.StockQuantity += req.Quantity;
+            if (req.UnitPrice > 0)
+                part.UnitPrice = req.UnitPrice;
+        }
+        else
+        {
+            if (part.StockQuantity < req.Quantity)
+            {
+                throw new InvalidOperationException($"Insufficient stock for {part.PartCode}. Current stock: {part.StockQuantity}, Requested: {req.Quantity}");
+            }
+            part.StockQuantity -= req.Quantity;
+        }
+
+        var tx = new SparePartTransaction
+        {
+            PartId = part.PartId,
+            TransactionType = type,
+            Quantity = req.Quantity,
+            UnitPrice = req.UnitPrice > 0 ? req.UnitPrice : part.UnitPrice,
+            ReferenceNo = req.ReferenceNo,
+            SupplierOrSource = req.SupplierOrSource,
+            Remarks = req.Remarks,
+            MachineId = req.MachineId,
+            MechanicId = req.MechanicId,
+            TransactionDate = DateTime.UtcNow,
+            CreatedBy = createdBy
+        };
+
+        _db.SparePartTransactions.Add(tx);
+        await _db.SaveChangesAsync(ct);
+
+        return new SparePartTransactionDto
+        {
+            TransactionId = tx.TransactionId,
+            PartId = part.PartId,
+            PartCode = part.PartCode,
+            PartName = part.PartName,
+            Unit = part.Unit,
+            TransactionType = tx.TransactionType,
+            Quantity = tx.Quantity,
+            UnitPrice = tx.UnitPrice,
+            TotalAmount = tx.Quantity * tx.UnitPrice,
+            ReferenceNo = tx.ReferenceNo,
+            SupplierOrSource = tx.SupplierOrSource,
+            Remarks = tx.Remarks,
+            MachineId = tx.MachineId,
+            MechanicId = tx.MechanicId,
+            TransactionDate = tx.TransactionDate,
+            CreatedBy = tx.CreatedBy
+        };
+    }
+
+    public async Task<List<SupervisorDto>> GetSupervisorsAsync(CancellationToken ct = default)
+    {
+        var supervisors = await _db.Employees
+            .Include(e => e.Department)
+            .Include(e => e.Section)
+            .Include(e => e.User)
+                .ThenInclude(u => u!.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+            .Where(e => (e.User != null && e.User.UserRoles.Any(ur => ur.Role != null && ur.Role.RoleName == DomainConstants.RoleSupervisor))
+                     || (e.Designation != null && e.Designation.Contains("Supervisor")))
+            .OrderBy(e => e.EmployeeName)
+            .Select(e => new SupervisorDto
+            {
+                EmployeeId = e.EmployeeId,
+                EmployeeCode = e.EmployeeCode,
+                EmployeeName = e.EmployeeName,
+                DepartmentId = e.DepartmentId,
+                DepartmentName = e.Department != null ? e.Department.DepartmentName : null,
+                SectionId = e.SectionId,
+                SectionCode = e.Section != null ? e.Section.SectionCode : null,
+                SectionName = e.Section != null ? e.Section.SectionName : null,
+                Designation = e.Designation,
+                MobileNumber = e.MobileNumber,
+                Email = e.Email,
+                Username = e.User != null ? e.User.Username : null,
+                ShiftName = "General Shift",
+                IsActive = e.User == null || e.User.IsActive
+            })
+            .ToListAsync(ct);
+
+        return supervisors;
+    }
+
+    public async Task<SupervisorDto> CreateSupervisorAsync(CreateSupervisorRequest req, CancellationToken ct = default)
+    {
+        var empCode = req.EmployeeCode.Trim().ToUpper();
+        var existingEmp = await _db.Employees.FirstOrDefaultAsync(e => e.EmployeeCode.ToUpper() == empCode, ct);
+        Employee emp;
+
+        if (existingEmp != null)
+        {
+            emp = existingEmp;
+            emp.EmployeeName = req.EmployeeName.Trim();
+            if (req.DepartmentId.HasValue) emp.DepartmentId = req.DepartmentId.Value;
+            if (req.SectionId.HasValue) emp.SectionId = req.SectionId.Value;
+            if (!string.IsNullOrWhiteSpace(req.Designation)) emp.Designation = req.Designation.Trim();
+            if (!string.IsNullOrWhiteSpace(req.MobileNumber)) emp.MobileNumber = req.MobileNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Email)) emp.Email = req.Email.Trim();
+        }
+        else
+        {
+            emp = new Employee
+            {
+                EmployeeCode = empCode,
+                EmployeeName = req.EmployeeName.Trim(),
+                DepartmentId = req.DepartmentId ?? 1,
+                SectionId = req.SectionId,
+                Designation = !string.IsNullOrWhiteSpace(req.Designation) ? req.Designation.Trim() : "Shift Production Supervisor",
+                MobileNumber = req.MobileNumber,
+                Email = req.Email
+            };
+            _db.Employees.Add(emp);
+        }
+        await _db.SaveChangesAsync(ct);
+
+        var supervisorRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == DomainConstants.RoleSupervisor, ct);
+        if (supervisorRole != null)
+        {
+            var username = !string.IsNullOrWhiteSpace(req.Username) ? req.Username.Trim().ToLower() : empCode.ToLower();
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.EmployeeId == emp.EmployeeId || u.Username.ToLower() == username, ct);
+            if (existingUser == null)
+            {
+                var pwd = !string.IsNullOrWhiteSpace(req.Password) ? req.Password : "Supervisor@123";
+                var newUser = new User
+                {
+                    EmployeeId = emp.EmployeeId,
+                    Username = username,
+                    PasswordHash = _hasher.HashPassword(pwd),
+                    IsActive = true
+                };
+                _db.Users.Add(newUser);
+                await _db.SaveChangesAsync(ct);
+
+                _db.UserRoles.Add(new UserRole { UserId = newUser.UserId, RoleId = supervisorRole.RoleId });
+                await _db.SaveChangesAsync(ct);
+            }
+        }
+
+        var list = await GetSupervisorsAsync(ct);
+        return list.FirstOrDefault(s => s.EmployeeCode.ToUpper() == empCode) ?? new SupervisorDto
+        {
+            EmployeeId = emp.EmployeeId,
+            EmployeeCode = emp.EmployeeCode,
+            EmployeeName = emp.EmployeeName,
+            Designation = emp.Designation
+        };
+    }
+
+    public async Task<List<SupervisorDto>> BulkImportSupervisorsAsync(List<CreateSupervisorRequest> requests, CancellationToken ct = default)
+    {
+        var result = new List<SupervisorDto>();
+        foreach (var req in requests)
+        {
+            if (string.IsNullOrWhiteSpace(req.EmployeeCode) || string.IsNullOrWhiteSpace(req.EmployeeName))
+                continue;
+            var created = await CreateSupervisorAsync(req, ct);
+            result.Add(created);
+        }
+        return result;
+    }
+
+    public async Task<MechanicDto> CreateMechanicAsync(CreateMechanicRequest req, CancellationToken ct = default)
+    {
+        var empCode = req.EmployeeCode.Trim().ToUpper();
+        var existingEmp = await _db.Employees.FirstOrDefaultAsync(e => e.EmployeeCode.ToUpper() == empCode, ct);
+        Employee emp;
+
+        var maintDept = await _db.Departments.FirstOrDefaultAsync(d => d.DepartmentCode == "DEPT-MAINT", ct);
+        var deptId = maintDept?.DepartmentId ?? 2;
+
+        if (existingEmp != null)
+        {
+            emp = existingEmp;
+            emp.EmployeeName = req.EmployeeName.Trim();
+            if (req.SectionId.HasValue) emp.SectionId = req.SectionId.Value;
+            if (!string.IsNullOrWhiteSpace(req.MobileNumber)) emp.MobileNumber = req.MobileNumber.Trim();
+        }
+        else
+        {
+            emp = new Employee
+            {
+                EmployeeCode = empCode,
+                EmployeeName = req.EmployeeName.Trim(),
+                DepartmentId = deptId,
+                SectionId = req.SectionId,
+                Designation = req.Specialization ?? "Maintenance Fitter",
+                MobileNumber = req.MobileNumber
+            };
+            _db.Employees.Add(emp);
+        }
+        await _db.SaveChangesAsync(ct);
+
+        var existingMech = await _db.Mechanics.FirstOrDefaultAsync(m => m.EmployeeId == emp.EmployeeId, ct);
+        if (existingMech == null)
+        {
+            var mech = new Mechanic
+            {
+                EmployeeId = emp.EmployeeId,
+                SectionId = req.SectionId,
+                Specialization = req.Specialization ?? "General Maintenance",
+                IsAvailable = true,
+                ActiveTicketCount = 0
+            };
+            _db.Mechanics.Add(mech);
+            await _db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            if (req.SectionId.HasValue) existingMech.SectionId = req.SectionId.Value;
+            if (!string.IsNullOrWhiteSpace(req.Specialization)) existingMech.Specialization = req.Specialization;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        var mechRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == DomainConstants.RoleMechanic, ct);
+        if (mechRole != null)
+        {
+            var username = empCode.ToLower();
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.EmployeeId == emp.EmployeeId || u.Username.ToLower() == username, ct);
+            if (existingUser == null)
+            {
+                var newUser = new User
+                {
+                    EmployeeId = emp.EmployeeId,
+                    Username = username,
+                    PasswordHash = _hasher.HashPassword("Mechanic@123"),
+                    IsActive = true
+                };
+                _db.Users.Add(newUser);
+                await _db.SaveChangesAsync(ct);
+
+                _db.UserRoles.Add(new UserRole { UserId = newUser.UserId, RoleId = mechRole.RoleId });
+                await _db.SaveChangesAsync(ct);
+            }
+        }
+
+        var list = await GetMechanicsAsync(null, ct);
+        return list.FirstOrDefault(m => m.EmployeeCode.ToUpper() == empCode) ?? new MechanicDto
+        {
+            EmployeeId = emp.EmployeeId,
+            EmployeeCode = emp.EmployeeCode,
+            EmployeeName = emp.EmployeeName,
+            Specialization = req.Specialization
+        };
+    }
+
+    public async Task<List<MechanicDto>> BulkImportMechanicsAsync(List<CreateMechanicRequest> requests, CancellationToken ct = default)
+    {
+        var result = new List<MechanicDto>();
+        foreach (var req in requests)
+        {
+            if (string.IsNullOrWhiteSpace(req.EmployeeCode) || string.IsNullOrWhiteSpace(req.EmployeeName))
+                continue;
+            var created = await CreateMechanicAsync(req, ct);
+            result.Add(created);
+        }
+        return result;
+    }
+
     private static MachineDto MapMachine(Machine m) => new()
     {
         MachineId = m.MachineId,
@@ -280,4 +747,3 @@ public class MasterService : IMasterService
             .FirstOrDefault()
     };
 }
-
