@@ -71,10 +71,10 @@ export default function App() {
 
       <footer className="border-t border-slate-200 bg-white py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 font-mono">
         <div>
-          <span className="font-bold text-emerald-800">AMAC MBMS</span> • Asiaan Metals & Aluminium Casting Pvt Ltd — Pune Plant #1
+          <span className="font-bold text-emerald-800">AMAC MBMS</span> • Asiaan Metals & Aluminium Casting Pvt Ltd — Unit 5 (U5)
         </div>
-        <div>
-          100% On-Premises Factory LAN • Port 5102 (API) / 5103 (UI)
+        <div className="text-slate-400 mt-1 sm:mt-0">
+          Machine Breakdown & Maintenance Management System
         </div>
       </footer>
     </div>

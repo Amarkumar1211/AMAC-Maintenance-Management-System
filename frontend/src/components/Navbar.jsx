@@ -4,10 +4,6 @@ import {
   LogOut,
   ChevronDown,
   Search,
-  Activity,
-  Server,
-  Database,
-  X,
   UserCheck,
   CheckCircle2,
   Calendar,
@@ -17,10 +13,7 @@ import {
 export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }) {
   const { user, logout, login } = useAuth();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [pingLatency, setPingLatency] = useState(null);
-  const [pinging, setPinging] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Current formatted date matching sample format (DD/MM/YYYY)
@@ -50,22 +43,6 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
       console.error(err);
     } finally {
       setSwitching(false);
-    }
-  };
-
-  const handlePingServer = async () => {
-    setPinging(true);
-    const start = performance.now();
-    try {
-      const res = await fetch('/api/masters/departments', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('mbms_token') || ''}` }
-      });
-      const end = performance.now();
-      setPingLatency(Math.round(end - start));
-    } catch (err) {
-      setPingLatency('Err');
-    } finally {
-      setPinging(false);
     }
   };
 
@@ -105,11 +82,11 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
             </div>
           </div>
 
-          {/* Right Area: Date Pill + Welcome Pill + Role Switch + Status + Red Logout Button + Mobile Drawer Toggle */}
+          {/* Right Area: Date Pill + Welcome Pill + Role Switch + Red Logout Button + Mobile Drawer Toggle */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
-            {/* Date Pill (Desktop) */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#07351b]/80 border border-emerald-700/60 text-emerald-100 text-xs font-mono font-medium shadow-inner">
+            {/* Current Production Date Indicator */}
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#07351b]/80 border border-emerald-700/60 text-emerald-200 text-xs font-mono">
               <Calendar className="w-3.5 h-3.5 text-emerald-300" />
               <span>{currentDate}</span>
             </div>
@@ -120,16 +97,6 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
               <span className="font-semibold truncate max-w-[120px]">{user?.employeeName || 'admin'}</span>
               <span className="text-[10px] text-emerald-300 font-mono">({user?.roles?.[0] || 'User'})</span>
             </div>
-
-            {/* Server Status Pill (5102 / 5103) */}
-            <button
-              onClick={() => setStatusModalOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#07351b]/90 hover:bg-[#07351b] border border-emerald-600/80 text-emerald-200 text-xs font-mono transition-all"
-              title="Click to view running application status and ports"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#1ea751] animate-pulse" />
-              <span className="font-bold text-[11px]">5102 / 5103</span>
-            </button>
 
             {/* Quick Switch Role Dropdown (Desktop) */}
             <div className="relative">
@@ -158,12 +125,12 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
                         user?.username === r.username ? 'bg-emerald-50/80 font-semibold' : 'text-slate-700'
                       }`}
                     >
-                      <div>
-                        <span className="block text-slate-900 font-medium">{r.label}</span>
-                        <span className={`text-[10px] ${r.color}`}>{r.role}</span>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-800">{r.label}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">user: {r.username}</span>
                       </div>
                       {user?.username === r.username && (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                       )}
                     </button>
                   ))}
@@ -171,17 +138,17 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
               )}
             </div>
 
-            {/* Logout Button (Coral Red Pill matching mobile screenshot) */}
+            {/* Red Logout Button */}
             <button
               onClick={logout}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-[#e04f44] hover:bg-[#c93c32] text-white text-xs font-semibold shadow-md transition-all active:scale-95 shrink-0"
-              title="Sign out of MBMS"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#e04f44] hover:bg-[#c93c31] text-white text-xs font-bold transition-all shadow-md active:scale-95"
+              title="Logout session"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
+              <span className="hidden sm:inline">Logout</span>
             </button>
 
-            {/* Mobile Hamburger Drawer Trigger (Direct match to mobile screenshot) */}
+            {/* Mobile Hamburger Drawer Button */}
             <button
               onClick={onToggleMobileSidebar}
               className="p-1.5 sm:p-2 rounded-xl bg-[#07351b] hover:bg-[#0f552e] text-emerald-200 hover:text-white border border-emerald-700/60 md:hidden flex items-center justify-center transition-all shrink-0 active:scale-95"
@@ -195,85 +162,6 @@ export default function Navbar({ activeTab, onTabChange, onToggleMobileSidebar }
 
         </div>
       </div>
-
-      {/* SYSTEM STATUS & RUNNER MODAL */}
-      {statusModalOpen && (
-        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 max-w-md w-full rounded-2xl p-6 shadow-2xl text-slate-800">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-emerald-600" />
-                AMAC MBMS System Status
-              </h3>
-              <button
-                onClick={() => setStatusModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 my-4 text-xs">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-sky-600" />
-                  <div>
-                    <div className="font-semibold text-slate-900">Backend Web API</div>
-                    <div className="text-[10px] text-slate-500 font-mono">http://localhost:5102</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
-                  PORT 5102 ONLINE
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-purple-600" />
-                  <div>
-                    <div className="font-semibold text-slate-900">Frontend UI (Vite)</div>
-                    <div className="text-[10px] text-slate-500 font-mono">http://localhost:5103</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
-                  PORT 5103 ONLINE
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <div className="font-semibold text-slate-900">SQL Server 2022 Express</div>
-                    <div className="text-[10px] text-slate-500 font-mono">localhost\SQLEXPRESS • MBMS_Production</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold">
-                  CONNECTED
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-              <button
-                onClick={handlePingServer}
-                disabled={pinging}
-                className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#0e4d2a] font-semibold text-xs border border-emerald-200"
-              >
-                {pinging ? 'Testing...' : pingLatency ? `Ping: ${pingLatency}ms` : 'Ping API Port'}
-              </button>
-
-              <button
-                onClick={() => setStatusModalOpen(false)}
-                className="px-4 py-1.5 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white font-bold text-xs shadow-sm"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </header>
   );
 }

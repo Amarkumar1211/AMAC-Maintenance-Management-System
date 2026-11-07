@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { 
   Factory, 
   Wrench, 
-  Flame, 
+  Flame,
   BarChart3, 
   ShieldCheck, 
   ChevronLeft, 
   ChevronRight,
-  Cpu,
-  Package,
   X
 } from 'lucide-react';
 
@@ -117,49 +115,13 @@ export default function Sidebar({ activeTab, onTabChange, mobileOpen, onClose })
             </button>
           );
         })}
-
-        {/* Shop Floor Plant Section Indicators (Informational) */}
-        {(!collapsed || isMobileDrawer) && (
-          <div className="pt-3 mt-3 border-t border-[#0f552e]/80 px-2 space-y-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/70 font-mono flex items-center justify-between">
-              <span>PLANT CELLS</span>
-              <span className="w-2 h-2 rounded-full bg-[#1ea751] animate-pulse" />
-            </div>
-            
-            <div className="space-y-1 text-xs text-emerald-200/90">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#07351b]/60 border border-[#0f552e]/60">
-                <span className="flex items-center gap-2 text-[11px]">
-                  <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                  CNC Machining
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900 text-emerald-300 font-mono">Cell #1</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#07351b]/60 border border-[#0f552e]/60">
-                <span className="flex items-center gap-2 text-[11px]">
-                  <Flame className="w-3.5 h-3.5 text-amber-400" />
-                  Aluminium Casting
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 font-mono">Furnace</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#07351b]/60 border border-[#0f552e]/60">
-                <span className="flex items-center gap-2 text-[11px]">
-                  <Package className="w-3.5 h-3.5 text-sky-400" />
-                  Assembly & Dispatch
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 font-mono">Bay 2</span>
-              </div>
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Sidebar Footer Plant Info */}
       {(!collapsed || isMobileDrawer) && (
         <div className="p-3 border-t border-[#0f552e] bg-[#07351b]/90 text-[10px] text-emerald-300/80 text-center font-mono">
-          <div>Pune Plant #1 • Chakan LAN</div>
-          <div className="text-emerald-400 font-bold mt-0.5">AMAC MBMS v2.0</div>
+          <div className="font-semibold text-emerald-200">AMAC • Unit 5 (U5)</div>
+          <div className="text-emerald-400 font-bold mt-0.5">MBMS v2.0</div>
         </div>
       )}
     </>
