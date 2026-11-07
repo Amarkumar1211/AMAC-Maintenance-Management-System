@@ -186,6 +186,12 @@ public static class DbInitializer
         }
 
         // 9. Seed Supervisors
+        var sectionLine1 = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-LINE1");
+        var sectionLine2 = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-LINE2");
+        var sectionCnc = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-CNC1");
+        var sectionPrs = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-PRS1" || s.SectionCode == "SEC-PRESS1");
+        var sectionUtil = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-UTIL1");
+
         var sup1Emp = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeCode == "EMP-SUP-01");
         if (sup1Emp == null)
         {
@@ -194,6 +200,7 @@ public static class DbInitializer
                 EmployeeCode = "EMP-SUP-01",
                 EmployeeName = "Amit Verma",
                 DepartmentId = prodDept.DepartmentId,
+                SectionId = sectionLine1?.SectionId,
                 Designation = "Senior Shift Supervisor (Assembly)",
                 MobileNumber = "+91 98230 34567",
                 Email = "amit.verma@factory.lan"
@@ -223,6 +230,7 @@ public static class DbInitializer
                 EmployeeCode = "EMP-SUP-02",
                 EmployeeName = "Suresh Patel",
                 DepartmentId = machDept.DepartmentId,
+                SectionId = sectionCnc?.SectionId,
                 Designation = "Machining Shop Supervisor",
                 MobileNumber = "+91 98240 45678",
                 Email = "suresh.patel@factory.lan"
@@ -244,26 +252,56 @@ public static class DbInitializer
             await db.SaveChangesAsync();
         }
 
+        var sup3Emp = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeCode == "EMP-SUP-03");
+        if (sup3Emp == null)
+        {
+            sup3Emp = new Employee
+            {
+                EmployeeCode = "EMP-SUP-03",
+                EmployeeName = "Vikram Joshi",
+                DepartmentId = stampDept.DepartmentId,
+                SectionId = sectionPrs?.SectionId,
+                Designation = "Stamping Press Shop Supervisor",
+                MobileNumber = "+91 98230 45679",
+                Email = "vikram.joshi@factory.lan"
+            };
+            db.Employees.Add(sup3Emp);
+            await db.SaveChangesAsync();
+
+            var sup3User = new User
+            {
+                EmployeeId = sup3Emp.EmployeeId,
+                Username = "supervisor3",
+                PasswordHash = hasher.HashPassword("Supervisor@123"),
+                IsActive = true
+            };
+            db.Users.Add(sup3User);
+            await db.SaveChangesAsync();
+
+            db.UserRoles.Add(new UserRole { UserId = sup3User.UserId, RoleId = supervisorRole.RoleId });
+            await db.SaveChangesAsync();
+        }
+
         // 10. Seed Mechanics (10 Mechanics)
         var mechanicSpecs = new[]
         {
-            ("Ramesh Yadav", "Electrical & AC Drives Specialist", "Morning Shift (A)"),
-            ("Santosh Kumar", "Hydraulics & High Pressure Systems", "Morning Shift (A)"),
-            ("Vikram Singh", "Mechanical Fitter & Transmission", "General Shift (G)"),
-            ("Dinesh Verma", "Automation, PLC & Sensors", "General Shift (G)"),
-            ("Sachin Patil", "Bearing & Vibration Analysis", "General Shift (G)"),
-            ("Anil Vishwakarma", "CNC Spindle & Tooling Fitter", "Evening Shift (B)"),
-            ("Mukesh Maurya", "Preventive Maintenance Lead", "Evening Shift (B)"),
-            ("Sunil Jha", "Pneumatics & Control Valves", "Evening Shift (B)"),
-            ("Pradeep Chauhan", "Heavy Stamping Press Specialist", "Night Shift (C)"),
-            ("Pankaj Tiwari", "General Maintenance Fitter", "Night Shift (C)")
+            ("Ramesh Yadav", "Electrical & AC Drives Specialist", "Morning Shift (A)", sectionCnc?.SectionId),
+            ("Santosh Kumar", "Hydraulics & High Pressure Systems", "Morning Shift (A)", sectionPrs?.SectionId),
+            ("Vikram Singh", "Mechanical Fitter & Transmission", "General Shift (G)", sectionLine1?.SectionId),
+            ("Dinesh Verma", "Automation, PLC & Sensors", "General Shift (G)", sectionLine2?.SectionId),
+            ("Sachin Patil", "Bearing & Vibration Analysis", "General Shift (G)", sectionUtil?.SectionId),
+            ("Anil Vishwakarma", "CNC Spindle & Tooling Fitter", "Evening Shift (B)", sectionCnc?.SectionId),
+            ("Mukesh Maurya", "Preventive Maintenance Lead", "Evening Shift (B)", sectionLine1?.SectionId),
+            ("Sunil Jha", "Pneumatics & Control Valves", "Evening Shift (B)", sectionPrs?.SectionId),
+            ("Pradeep Chauhan", "Heavy Stamping Press Specialist", "Night Shift (C)", sectionPrs?.SectionId),
+            ("Pankaj Tiwari", "General Maintenance Fitter", "Night Shift (C)", (int?)null)
         };
 
         for (int i = 0; i < mechanicSpecs.Length; i++)
         {
             var code = $"EMP-MCH-{(i + 1):D2}";
             var username = $"mech{i + 1}";
-            var (name, spec, shift) = mechanicSpecs[i];
+            var (name, spec, shift, mechSecId) = mechanicSpecs[i];
 
             var mechEmp = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeCode == code);
             if (mechEmp == null)
@@ -273,6 +311,7 @@ public static class DbInitializer
                     EmployeeCode = code,
                     EmployeeName = name,
                     DepartmentId = maintDept.DepartmentId,
+                    SectionId = mechSecId,
                     Designation = "Maintenance Technician",
                     MobileNumber = $"98765433{(i + 1):D2}",
                     Email = $"{username}@factory.lan"
@@ -295,6 +334,7 @@ public static class DbInitializer
                 var mech = new Mechanic
                 {
                     EmployeeId = mechEmp.EmployeeId,
+                    SectionId = mechSecId,
                     Specialization = spec,
                     ShiftName = shift,
                     IsAvailable = true,
@@ -308,9 +348,9 @@ public static class DbInitializer
         // 11. Seed Machines
         if (!await db.Machines.AnyAsync())
         {
-            var sectionLine1 = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-LINE1");
-            var sectionCnc = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-CNC1");
-            var sectionPrs = await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-PRS1");
+            sectionLine1 ??= await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-LINE1");
+            sectionCnc ??= await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-CNC1");
+            sectionPrs ??= await db.ProductionSections.FirstOrDefaultAsync(s => s.SectionCode == "SEC-PRS1");
 
             var machinesList = new List<Machine>
             {
@@ -348,8 +388,8 @@ public static class DbInitializer
             var catHyd = await db.BreakdownCategories.FirstAsync(c => c.CategoryName == "Hydraulic");
             var catMech = await db.BreakdownCategories.FirstAsync(c => c.CategoryName == "Mechanical");
 
-            var mech1 = await db.Mechanics.Include(m => m.Employee).FirstAsync(m => m.Employee!.EmployeeName == "Alex Brown");
-            var mech2 = await db.Mechanics.Include(m => m.Employee).FirstAsync(m => m.Employee!.EmployeeName == "Michael Clark");
+            var mech1 = await db.Mechanics.Include(m => m.Employee).FirstAsync(m => m.Employee!.EmployeeCode == "EMP-MCH-01");
+            var mech2 = await db.Mechanics.Include(m => m.Employee).FirstAsync(m => m.Employee!.EmployeeCode == "EMP-MCH-02");
 
             var now = DateTime.UtcNow;
 
