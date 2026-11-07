@@ -4,6 +4,7 @@ import { subscribeToNotification } from '../services/signalr';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import TicketDetailModal from '../components/TicketDetailModal';
+import BreakdownSlipModal from '../components/BreakdownSlipModal';
 import {
   Wrench,
   UserPlus,
@@ -17,6 +18,9 @@ import {
   RotateCcw,
   Phone,
   ChevronRight,
+  Layers,
+  Printer,
+  FileText,
   X
 } from 'lucide-react';
 
@@ -24,8 +28,11 @@ export default function MaintenancePortal() {
   const [activeTab, setActiveTab] = useState('triage'); // 'triage', 'approval_queue', 'mechanics_matrix', 'all_open'
   const [tickets, setTickets] = useState([]);
   const [mechanics, setMechanics] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [sectionFilter, setSectionFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [selectedSlipTicketId, setSelectedSlipTicketId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Quick Dispatch Modal state
@@ -37,12 +44,14 @@ export default function MaintenancePortal() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tList, mList] = await Promise.all([
+      const [tList, mList, sList] = await Promise.all([
         TicketsAPI.getAll(),
-        MastersAPI.getMechanics()
+        MastersAPI.getMechanics(),
+        MastersAPI.getSections()
       ]);
-      setTickets(tList);
-      setMechanics(mList);
+      setTickets(tList || []);
+      setMechanics(mList || []);
+      setSections(sList || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -84,9 +93,14 @@ export default function MaintenancePortal() {
     }
   };
 
-  const unassignedTickets = tickets.filter(t => t.currentStatus === 'NEW');
-  const inchargeApprovalQueue = tickets.filter(t => t.currentStatus === 'AWAITING_INCHARGE');
-  const allActiveTickets = tickets.filter(t => t.currentStatus !== 'CLOSED' && t.currentStatus !== 'CANCELLED');
+  const sectionScopedTickets = tickets.filter(t => {
+    if (sectionFilter === 'all') return true;
+    return t.sectionId === parseInt(sectionFilter);
+  });
+
+  const unassignedTickets = sectionScopedTickets.filter(t => t.currentStatus === 'NEW');
+  const inchargeApprovalQueue = sectionScopedTickets.filter(t => t.currentStatus === 'AWAITING_INCHARGE');
+  const allActiveTickets = sectionScopedTickets.filter(t => t.currentStatus !== 'CLOSED' && t.currentStatus !== 'CANCELLED');
 
   const filteredActiveTickets = allActiveTickets.filter(t =>
     t.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,11 +150,10 @@ export default function MaintenancePortal() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveTab('triage')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeTab === 'triage'
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'triage'
                 ? 'bg-[#0e4d2a] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <AlertCircle className="w-3.5 h-3.5" />
             <span>Unassigned Triage ({unassignedTickets.length})</span>
@@ -151,11 +164,10 @@ export default function MaintenancePortal() {
 
           <button
             onClick={() => setActiveTab('approval_queue')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeTab === 'approval_queue'
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'approval_queue'
                 ? 'bg-[#1ea751] text-white shadow-xs ring-2 ring-[#1ea751]/20'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>Final Sign-off Queue ({inchargeApprovalQueue.length})</span>
@@ -163,11 +175,10 @@ export default function MaintenancePortal() {
 
           <button
             onClick={() => setActiveTab('mechanics_matrix')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeTab === 'mechanics_matrix'
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'mechanics_matrix'
                 ? 'bg-sky-700 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <Users className="w-3.5 h-3.5" />
             <span>Technicians Roster ({mechanics.length})</span>
@@ -175,11 +186,10 @@ export default function MaintenancePortal() {
 
           <button
             onClick={() => setActiveTab('all_open')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeTab === 'all_open'
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'all_open'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <Clock className="w-3.5 h-3.5" />
             <span>All Open Incidents ({allActiveTickets.length})</span>
@@ -197,6 +207,57 @@ export default function MaintenancePortal() {
               className="bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-[#0e4d2a] w-full sm:w-56"
             />
           </div>
+        )}
+      </div>
+
+      {/* Interactive Plant Section Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-slate-200/80 rounded-2xl px-3.5 py-2.5 shadow-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono mr-1 flex items-center gap-1">
+            <Layers className="w-3.5 h-3.5 text-emerald-800" />
+            PLANT SECTION:
+          </span>
+
+          <button
+            onClick={() => setSectionFilter('all')}
+            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${sectionFilter === 'all'
+                ? 'bg-[#0e4d2a] text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+          >
+            All Plant Bays ({tickets.length})
+          </button>
+
+          {sections.map(s => {
+            const count = tickets.filter(t => t.sectionId === s.sectionId && t.currentStatus !== 'CLOSED' && t.currentStatus !== 'CANCELLED').length;
+            return (
+              <button
+                key={s.sectionId}
+                onClick={() => setSectionFilter(String(s.sectionId))}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${sectionFilter === String(s.sectionId)
+                    ? 'bg-[#0e4d2a] text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+              >
+                <span>{s.sectionName}</span>
+                {count > 0 && (
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${sectionFilter === String(s.sectionId) ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700 font-bold'
+                    }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {sectionFilter !== 'all' && (
+          <button
+            onClick={() => setSectionFilter('all')}
+            className="text-xs font-bold text-emerald-800 hover:underline"
+          >
+            Clear Section Filter
+          </button>
         )}
       </div>
 
@@ -225,8 +286,14 @@ export default function MaintenancePortal() {
                   <h3 className="font-black text-base text-slate-900 mb-0.5 leading-snug">
                     {t.machineCode} — {t.machineName}
                   </h3>
-                  <div className="text-xs text-slate-500 mb-3">
-                    {t.departmentName} • Category: <strong className="text-slate-700">{t.categoryName}</strong>
+                  <div className="text-xs text-slate-500 mb-3 flex flex-wrap items-center gap-1.5">
+                    <span>{t.departmentName}</span>
+                    {t.sectionName && (
+                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold">
+                        {t.sectionName}
+                      </span>
+                    )}
+                    <span>• Category: <strong className="text-slate-700">{t.categoryName}</strong></span>
                   </div>
 
                   <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200 text-xs text-slate-800 mb-4">
@@ -241,6 +308,14 @@ export default function MaintenancePortal() {
                   </span>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedSlipTicketId(t.ticketId)}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      title="Print Breakdown Coupon & Job Card"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Coupon</span>
+                    </button>
                     <button
                       onClick={() => setSelectedTicketId(t.ticketId)}
                       className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
@@ -312,13 +387,23 @@ export default function MaintenancePortal() {
                     {t.totalDowntimeMinutes}m stoppage
                   </span>
 
-                  <button
-                    onClick={() => setSelectedTicketId(t.ticketId)}
-                    className="px-5 py-2.5 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Review & Final Sign-off</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedSlipTicketId(t.ticketId)}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      title="Print Breakdown Coupon & Job Card"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Coupon</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedTicketId(t.ticketId)}
+                      className="px-4 py-2 rounded-xl bg-[#0e4d2a] hover:bg-[#07351b] text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Review & Sign-off</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -343,55 +428,66 @@ export default function MaintenancePortal() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mechanics.map((m) => (
-              <div
-                key={m.mechanicId}
-                className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono text-xs text-slate-500 font-bold">{m.employeeCode}</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      m.isAvailable ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {m.isAvailable ? 'Available' : 'Busy'}
-                    </span>
-                  </div>
+            {mechanics
+              .filter(m => sectionFilter === 'all' || !m.sectionId || m.sectionId === parseInt(sectionFilter))
+              .map((m) => (
+                <div
+                  key={m.mechanicId}
+                  className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-xs text-slate-500 font-bold">{m.employeeCode}</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${m.isAvailable ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                        {m.isAvailable ? 'Available' : 'Busy'}
+                      </span>
+                    </div>
 
-                  <div className="flex items-center gap-3 mb-3.5">
-                    <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-[#0e4d2a] border border-emerald-200 font-bold flex items-center justify-center text-base shadow-xs">
-                      {m.employeeName[0]}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">{m.employeeName}</h4>
-                      <p className="text-xs text-emerald-800 font-semibold">{m.specialization || 'General Maintenance'}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                    <div className="flex justify-between">
-                      <span>Shift:</span>
-                      <strong className="text-slate-900">{m.shiftName || 'General'}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Active Work Orders:</span>
-                      <strong className={`font-mono ${m.activeTicketCount > 0 ? 'text-amber-800 font-bold' : 'text-slate-700'}`}>
-                        {m.activeTicketCount}
-                      </strong>
-                    </div>
-                    {m.mobileNumber && (
-                      <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
-                        <span>Direct Contact:</span>
-                        <a href={`tel:${m.mobileNumber}`} className="text-emerald-800 font-mono font-bold hover:underline flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          <span>{m.mobileNumber}</span>
-                        </a>
+                    <div className="flex items-center gap-3 mb-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-[#0e4d2a] border border-emerald-200 font-bold flex items-center justify-center text-base shadow-xs">
+                        {m.employeeName[0]}
                       </div>
-                    )}
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900">{m.employeeName}</h4>
+                        <p className="text-xs text-emerald-800 font-semibold">{m.specialization || 'General Maintenance'}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                      <div className="flex justify-between items-center">
+                        <span>Assigned Bay / Section:</span>
+                        {m.sectionName ? (
+                          <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
+                            {m.sectionName}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 font-mono text-[11px]">Plant-Wide Floating</span>
+                        )}
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Shift:</span>
+                        <strong className="text-slate-900">{m.shiftName || 'General'}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Active Work Orders:</span>
+                        <strong className={`font-mono ${m.activeTicketCount > 0 ? 'text-amber-800 font-bold' : 'text-slate-700'}`}>
+                          {m.activeTicketCount}
+                        </strong>
+                      </div>
+                      {m.mobileNumber && (
+                        <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
+                          <span>Direct Contact:</span>
+                          <a href={`tel:${m.mobileNumber}`} className="text-emerald-800 font-mono font-bold hover:underline flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            <span>{m.mobileNumber}</span>
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -414,7 +510,14 @@ export default function MaintenancePortal() {
                 </div>
 
                 <h3 className="font-bold text-sm text-slate-900 leading-snug">{t.machineCode} — {t.machineName}</h3>
-                <div className="text-xs text-slate-500 mb-2.5">{t.departmentName}</div>
+                <div className="text-xs text-slate-500 mb-2.5 flex flex-wrap items-center gap-1.5">
+                  <span>{t.departmentName}</span>
+                  {t.sectionName && (
+                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold">
+                      {t.sectionName}
+                    </span>
+                  )}
+                </div>
 
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs text-slate-700 mb-3 line-clamp-2">
                   {t.breakdownReason}
@@ -423,9 +526,21 @@ export default function MaintenancePortal() {
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                 <StatusBadge status={t.currentStatus} />
-                <span className="text-red-700 font-mono font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                  {t.totalDowntimeMinutes}m
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSlipTicketId(t.ticketId);
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    title="Print Standard Breakdown Coupon"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  </button>
+                  <span className="text-red-700 font-mono font-bold bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                    {t.totalDowntimeMinutes}m
+                  </span>
+                </div>
               </div>
             </div>
           ))}
@@ -471,11 +586,23 @@ export default function MaintenancePortal() {
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#0e4d2a]"
                 >
                   <option value="">-- Choose Mechanic --</option>
-                  {mechanics.map(m => (
-                    <option key={m.mechanicId} value={m.mechanicId}>
-                      {m.employeeName} ({m.specialization || 'General'}) • Active: {m.activeTicketCount} • {m.shiftName}
-                    </option>
-                  ))}
+                  {mechanics
+                    .slice()
+                    .sort((a, b) => {
+                      const aMatch = quickAssignTicket?.sectionId && a.sectionId === quickAssignTicket.sectionId;
+                      const bMatch = quickAssignTicket?.sectionId && b.sectionId === quickAssignTicket.sectionId;
+                      if (aMatch && !bMatch) return -1;
+                      if (!aMatch && bMatch) return 1;
+                      return 0;
+                    })
+                    .map(m => {
+                      const isSectionSpecialist = quickAssignTicket?.sectionId && m.sectionId === quickAssignTicket.sectionId;
+                      return (
+                        <option key={m.mechanicId} value={m.mechanicId}>
+                          {isSectionSpecialist ? '★ [BAY SPECIALIST] ' : ''}{m.employeeName} ({m.specialization || 'General'}) • {m.sectionName ? `${m.sectionName}` : 'Plant-Wide'} • Active: {m.activeTicketCount}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -517,6 +644,14 @@ export default function MaintenancePortal() {
           ticketId={selectedTicketId}
           onClose={() => setSelectedTicketId(null)}
           onRefresh={loadData}
+        />
+      )}
+
+      {/* Breakdown Coupon / Intimation Slip Modal */}
+      {selectedSlipTicketId && (
+        <BreakdownSlipModal
+          ticketId={selectedSlipTicketId}
+          onClose={() => setSelectedSlipTicketId(null)}
         />
       )}
 
