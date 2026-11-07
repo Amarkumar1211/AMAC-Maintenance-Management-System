@@ -158,7 +158,7 @@ export default function SupervisorPortal() {
               Production Dashboard — Shift Breakdown Operations
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pune Plant #1 • Chakan Industrial Area • Shift Supervisor: <span className="font-bold text-emerald-800">{user?.employeeName || 'Amit Verma'}</span>
+              Unit 5 (U5) • Shift Supervisor: <span className="font-bold text-emerald-800">{user?.employeeName || 'Amit Verma'}</span>
             </p>
           </div>
         </div>

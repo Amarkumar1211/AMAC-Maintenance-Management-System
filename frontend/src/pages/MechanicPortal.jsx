@@ -115,7 +115,7 @@ export default function MechanicPortal() {
               Mechanic Repair Workbench — Field Engineering
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pune Plant #1 • Chakan Industrial Area • Logged Technician: <span className="font-bold text-emerald-800">{user?.employeeName || 'Ramesh Yadav'}</span>
+              Unit 5 (U5) • Logged Technician: <span className="font-bold text-emerald-800">{user?.employeeName || 'Ramesh Yadav'}</span>
             </p>
           </div>
         </div>
@@ -383,17 +383,15 @@ export default function MechanicPortal() {
       </div>
     </div>
 
-      {/* Ticket Detail Modal */ }
-  {
-    selectedTicketId && (
-      <TicketDetailModal
-        ticketId={selectedTicketId}
-        onClose={() => setSelectedTicketId(null)}
-        onRefresh={loadData}
-      />
-    )
-  }
+      {/* Ticket Detail Modal */}
+      {selectedTicketId && (
+        <TicketDetailModal
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+          onRefresh={loadData}
+        />
+      )}
 
-    </div >
+    </div>
   );
 }
